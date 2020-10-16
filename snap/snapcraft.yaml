@@ -1,0 +1,17 @@
+name: nextbox
+base: core18
+version: '0.1'
+summary: Nitrokey NextBox Core Snap
+description: |
+  Nitrokey NextBox Core Snap handling global configurations and startup behavior
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: arm64
+  - build-on: amd64
+
+parts:
+  plugin: dump
+  source: src/
