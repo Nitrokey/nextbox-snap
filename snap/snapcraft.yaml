@@ -13,6 +13,10 @@ architectures:
   - build-on: amd64
 
 parts:
-  sources:
+  bins:
     plugin: dump
-    source: src/
+    source: src/bin/
+
+  config:
+    plugin: dump
+    source: src/nextbox.conf
