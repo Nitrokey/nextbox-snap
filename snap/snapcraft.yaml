@@ -13,5 +13,6 @@ architectures:
   - build-on: amd64
 
 parts:
-  plugin: dump
-  source: src/
+  sources:
+    plugin: dump
+    source: src/
