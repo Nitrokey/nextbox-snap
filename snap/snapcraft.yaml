@@ -29,8 +29,8 @@ parts:
     python-version: python3
     requirements: 
       - requirements.txt
-    organize:
-      src/*: nextbox-daemon/
+    #organize:
+    #  src/*: nextbox-daemon/
 
 
 
