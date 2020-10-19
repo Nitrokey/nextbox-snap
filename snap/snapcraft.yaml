@@ -16,13 +16,19 @@ parts:
   nextbox-bins:
     plugin: dump
     source: bin/
-    prime: 
-      - backup-import
-      - backup-export
 
   nextbox-config:
     plugin: dump
     source: conf/
-    prime: 
-      - nextbox.conf
+
+  nextbox-daemon:
+    plugin: python
+    source: nextbox-daemon/
+    python-version: python3
+    python-packages:
+      - flask
+      - pyyaml
+      #- uwsgi
+
+
 
