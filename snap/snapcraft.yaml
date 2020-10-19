@@ -27,10 +27,10 @@ parts:
     plugin: python
     source: nextbox-daemon/
     python-version: python3
-    stage-packages:
-      - flask
+    requirements: 
+      - requirements.txt
     organize:
-      ./*: nextbox-daemon/
+      src/*: nextbox-daemon/
 
 
 
