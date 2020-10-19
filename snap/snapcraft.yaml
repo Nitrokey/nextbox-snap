@@ -16,6 +16,8 @@ parts:
   nextbox-bins:
     plugin: dump
     source: bin/
+    organize: 
+      ./*: bin/
 
   nextbox-config:
     plugin: dump
@@ -27,8 +29,8 @@ parts:
     python-version: python3
     stage-packages:
       - flask
-      - pyyaml
-      #- uwsgi
+    organize:
+      ./*: nextbox-daemon/
 
 
 
