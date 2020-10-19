@@ -25,7 +25,7 @@ parts:
     plugin: python
     source: nextbox-daemon/
     python-version: python3
-    python-packages:
+    stage-packages:
       - flask
       - pyyaml
       #- uwsgi
