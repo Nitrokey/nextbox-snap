@@ -7,6 +7,9 @@ import threading
 import psutil
 from functools import wraps
 
+# append proper site-packages path
+sys.path.append(Path(__file__).parent.parent)
+
 
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify
