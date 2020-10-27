@@ -72,4 +72,6 @@ def get_partitions():
                 out["mounted"][dev] = mountpoint
                 if mountpoint == "/media/backup":
                     out["backup"] = dev
+                elif mountpoint == "/media/nextcloud":
+                    out["main"] = dev
     return out

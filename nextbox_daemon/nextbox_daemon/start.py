@@ -1,21 +1,20 @@
 import os
 import sys
 from pathlib import Path
-import time
 import subprocess
-import threading
-import psutil
 from functools import wraps
+import select
+import time
+import threading
 
-# append proper site-packages path
-sys.path.append(Path(__file__).parent.parent)
+# append proper (snap) site-packages path
+sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 
-
+import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify
 
 from utils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
-
 
 
 #CONFIG_PATH = "/var/snap/nextbox/current/nextbox.conf"
@@ -27,8 +26,8 @@ app = Flask(__name__)
 app.secret_key = "123456-nextbox-123456" #cfg["secret_key"]
 
 # backup thread handler
-backup_thread = None
-backup_output = None
+backup_proc = None
+backup_state = {}
 
 
 def error(msg, data=None):
@@ -59,28 +58,28 @@ def make_pass(pwd):
     # @todo: add hashed password here
     return pwd
 
+
 def check_auth_global(username, password):
-    return (username == cfg["user"] and cfg["password"] == make_pass(password)) \
-        or (cfg["user"] is None and cfg["password"] is None)
+    return username == cfg["user"] and cfg["password"] == make_pass(password)
+
 
 def http_authenticate():
     return Response("No access!", 401, {
       "WWW-Authenticate": 'Basic realm="Login Required"'}
     )
 
+
 # decorator for authenticated access
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth_global(auth.username, auth.password):
-            return http_authenticate()
+        # only check user/password, if it's actually set in the config file
+        if not (cfg["user"] is None and cfg["password"] is None):
+            auth = request.authorization
+            if not auth or not check_auth_global(auth.username, auth.password):
+                return http_authenticate()
         return f(*args, **kwargs)
     return decorated
-
-# dummy decorator for non-authenticated access
-def no_auth(f):
-    return f
 
 
 @app.route("/logout")
@@ -89,12 +88,14 @@ def http_logout():
 
 
 @app.route("/storage")
+@requires_auth
 def storage():
     parts = get_partitions()
     return success(data=parts)
 
 
 @app.route("/storage/mount/<device>/<name>")
+@requires_auth
 def mount_storage(device, name):
 
     if ".." in device or "/" in device or name == "nextcloud":
@@ -137,6 +138,7 @@ def mount_storage(device, name):
 
 
 @app.route("/storage/umount/<name>")
+@requires_auth
 def umount_storage(name):
     if ".." in name or "/" in name or name == "nextcloud":
         return error("invalid name")
@@ -158,73 +160,115 @@ def umount_storage(name):
     return success(f"unmounting successful ({mount_target})")
 
 
-def backup_job():
-    global backup_output
-    backup_output = subprocess.getoutput(f"nextcloud-nextbox.export")
-
-
-def make_restore_job(directory):
-    def restore_job():
-        global backup_output
-        backup_output = subprocess.getoutput(f"nextcloud-nextbox.import {directory}")
-    return restore_job
-
-
 def check_for_backup_process():
-    global backup_thread, backup_output
-    out = {"running": backup_thread is not None}
+    global backup_proc, backup_state
+
+    if backup_proc is None:
+        return {"running": False}
+
+    out = {}
     for proc in psutil.process_iter():
-        if proc.name() in ["nextcloud-nextbox.export", "nextcloud-nextbox.import"]:
+        if proc.name() in ["export-data", "import-data"]:
             out["what"] = proc.name()
             out["started"] = proc.create_time()
 
+    sel = select.poll()
+    sel.register(backup_proc.stdout, select.POLLIN)
 
-    # if no process is running, assume it's over -> thus join and empty backup_thread
-    if "what" not in out:
-        if backup_thread:
-            assert isinstance(backup_thread, threading.Thread)
-            backup_thread.join()
-            out["log"] = backup_output
-        backup_thread = None
-        backup_output = None
-        out["running"] = False
+    line = None
+    while line != b"":
+        # max wait in milliseconds for new inputs
+        if not sel.poll(1):
+          break
+
+        line = backup_proc.stdout.readline()
+        toks = line.strip().split(rb"\b")[0].split()
+
+        print (toks)
+        print("-------------------------")
+        print("-------------------------")
+        print("-------------------------")
+        print("-------------------------")
+        print("-------------------------")
+
+        # empty line
+        if len(toks) == 0:
+            continue
+
+        # handle exporting line step
+        if toks[0].lower() == b"exporting" and len(toks) > 1:
+            backup_state["step"] = toks[0], toks[1].replace(b".", b"")
+
+        # handle importing line step
+        elif toks[0].lower() == b"importing" and len(toks) > 1:
+            backup_state["step"] = toks[0], toks[1].replace(b".", b"")
+
+        # handle progress (how many files are already done)
+        elif len(toks) > 1 and b"=" in toks[-1]:
+            subtoks = toks[-1].split(b"=")
+            if len(subtoks) > 1:
+                try:
+                    lhs, rhs = subtoks[-1][:-1].split(b"/")
+                    ratio = (int(lhs) / int(rhs)) * 100
+                    backup_state["progress"] = f"{ratio:.1f}"
+                except ValueError:
+                    backup_state["progress"] = None
+
+    # check if we are already done
+    if backup_proc.poll() is not None:
+        ret = backup_proc.poll()
+        backup_proc = None
+        backup_state = {}
+        out = {"state": "finished", "returncode": ret, "running": False}
+    else:
+        out = dict(backup_state)
+        out["running"] = True
 
     return out
 
 
 @app.route("/backup")
+@requires_auth
 def backup():
     data = cfg["backup"]
     data["operation"] = check_for_backup_process()
+    data["found"] = None
+
+    if cfg["backup"]["mount"] is not None and get_partitions()["backup"] is not None:
+        data["found"] = os.listdir("/media/backup")
+
     return success(data=data)
+
 
 #@app.route("/backup/cancel")
 #def backup_cancel(name):
-#    global backup_thread
+#    global backup_proc
 #
 #    subprocess.check_call(["killall", "nextcloud-nextbox.export"])
 #    #subprocess.check_call(["killall", "nextcloud-nextbox.import"])
 #
 #    pass
 
-@app.route("/backup/start/<name>")
-def backup_start(name):
-    global backup_thread
-    backup_info = check_for_backup_process()
 
-    if ".." in name or "/" in name:
-        return error("invalid name", data=backup_info)
+@app.route("/backup/start")
+@requires_auth
+def backup_start():
+    global backup_proc
+    backup_info = check_for_backup_process()
 
     if backup_info["running"]:
         return error("backup/restore operation already running", data=backup_info)
 
-    backup_thread = threading.Thread(target=backup_job)
-    backup_thread.start()
+    backup_proc = subprocess.Popen(["nextcloud-nextbox.export"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
     return success("backup started", data=backup_info)
 
+
 @app.route("/backup/restore/<name>")
+@requires_auth
 def backup_restore(name):
-    global backup_thread
+    global backup_proc
     backup_info = check_for_backup_process()
 
     if ".." in name or "/" in name:
@@ -234,27 +278,39 @@ def backup_restore(name):
         return error("backup/restore operation already running", data=backup_info)
 
     directory = f"/media/backup/{name}"
-    backup_thread = threading.Thread(target=make_restore_job(directory))
-    backup_thread.start()
+    backup_proc = subprocess.Popen(["nextcloud-nextbox.import", directory],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     return success("restore started", data=backup_info)
 
-print("NextBox daemon")
 
 if __name__ == "__main__":
-    app.run(host=cfg["listen"]["host"], port=cfg["listen"]["port"], debug=True)
+    app.run(host=cfg["listen"]["host"], port=cfg["listen"]["port"],
+            debug=True, threaded=True, processes=1)
 
 
 
 # @todo: password change
 # @todo: hostname, nextcloud (http, https), listen
-# @todo: derive secret key -> machine-id ?
+# @todo: derive secret key -> machine-id (maybe only as flask-secret, not for hashing?)
 # @todo: decorate with requires_auth
-# @todo: handle multiple backup processes
-# @todo: join thread with timeout
-# @todo: validate (mount) name
+# @todo: handle multiple backup processes (needed?)
+# @todo: validate (mount) name (partly done, enough?)
 # @fixme: thread-locks ?
 # @todo: logging!=!==!
+# @todo: check for backup operation if unmounting backup
+
+# @todo: how to show the backup/restore progress during the maintainance mode
+# from flask import abort, request
+#
+#@app.before_request
+#def limit_remote_addr():
+#    if request.remote_addr != '10.20.30.40':
+#        abort(403)  # Forbidden
+#
+#### or we do a decorator which is checking for the remote address and allow any IP
+#### for the backup/restore progress endpoint
+
 
 
 #### done:
