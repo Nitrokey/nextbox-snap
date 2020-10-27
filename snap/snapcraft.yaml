@@ -25,12 +25,10 @@ parts:
 
   nextbox-daemon:
     plugin: python
-    source: nextbox-daemon/
+    source: nextbox_daemon/
     python-version: python3
     requirements: 
       - requirements.txt
-    #organize:
-    #  src/*: nextbox-daemon/
 
 
 

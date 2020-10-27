@@ -8,7 +8,7 @@ setup(
     author_email = "meissner@nitrokey.com",
     description = "The Nitrokey - NextBox System Control Daemon",
     license = "GPL",
-    packages = ["nextbox-daemon"],
+    packages = ["nextbox_daemon"],
     classifiers=[
         "Development Status :: 3 - Beta",
         "Topic :: Utilities",

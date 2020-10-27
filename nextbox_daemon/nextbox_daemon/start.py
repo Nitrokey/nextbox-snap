@@ -97,7 +97,7 @@ def storage():
 @app.route("/storage/mount/<device>/<name>")
 def mount_storage(device, name):
 
-    if ".." in device or "/" in device:
+    if ".." in device or "/" in device or name == "nextcloud":
         return error("invalid device")
     if ".." in name or "/" in name:
         return error("invalid name")
@@ -138,7 +138,7 @@ def mount_storage(device, name):
 
 @app.route("/storage/umount/<name>")
 def umount_storage(name):
-    if ".." in name or "/" in name:
+    if ".." in name or "/" in name or name == "nextcloud":
         return error("invalid name")
 
     mount_target = f"/media/{name}"
