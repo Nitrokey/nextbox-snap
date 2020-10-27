@@ -14,7 +14,7 @@ sys.path.append(Path(__file__).parent.parent)
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify
 
-from utils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
+from nextbox_daeutils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
 
 
 
@@ -249,10 +249,13 @@ if __name__ == "__main__":
 # @todo: password change
 # @todo: hostname, nextcloud (http, https), listen
 # @todo: derive secret key -> machine-id ?
-# @todo: append sys.paths
 # @todo: decorate with requires_auth
 # @todo: handle multiple backup processes
 # @todo: join thread with timeout
 # @todo: validate (mount) name
 # @fixme: thread-locks ?
 # @todo: logging!=!==!
+
+
+#### done:
+# @todo: append sys.paths
