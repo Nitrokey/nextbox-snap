@@ -14,7 +14,7 @@ sys.path.append(Path(__file__).parent.parent)
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify
 
-from nextbox_daeutils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
+from utils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
 
 
 

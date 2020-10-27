@@ -23,7 +23,7 @@ def load_config(config_path):
                 "port": 18585,
             },
             "nextcloud": {
-                "http_port": 22,
+                "http_port": 80,
                 "https_port": None,
                 "hostname": "NextBox",
             }
@@ -42,15 +42,15 @@ def save_config(cfg, config_path):
 
 def get_partitions():
     alldevs = os.listdir("/dev/")
-    alllabels  = os.listdir("/dev/disk/by-label")
+    alllabels = os.listdir("/dev/disk/by-label")
 
     out = {
         "available": [],
         "mounted": {},
         "backup": None,
         "main": None
-
     }
+
     label_map = {}
     for label in alllabels:
         p = Path(f"/dev/disk/by-label/{label}")
