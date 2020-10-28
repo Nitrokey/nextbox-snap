@@ -30,6 +30,32 @@ backup_proc = None
 backup_state = {}
 
 
+
+
+### CORS section
+@app.after_request
+def after_request_func(response):
+    origin = request.headers.get('Origin')
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Headers', 'x-csrf-token')
+        response.headers.add('Access-Control-Allow-Methods',
+                            'GET, POST, OPTIONS, PUT, PATCH, DELETE')
+        if origin:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        if origin:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+
+    return response
+### end CORS section
+
+
+
+
 def error(msg, data=None):
     msg = [msg]
     if cfg["user"] is None and cfg["password"] is None:
