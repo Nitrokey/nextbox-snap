@@ -12,7 +12,7 @@ sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 
 import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
-    url_for, send_file, Blueprint, render_template, jsonify
+    url_for, send_file, Blueprint, render_template, jsonify, make_response
 
 from utils import load_config, save_config, get_partitions, NEXTBOX_HDD_LABEL
 
@@ -311,11 +311,10 @@ def backup_restore(name):
 
 
 if __name__ == "__main__":
-    app.run(host=cfg["listen"]["host"], port=cfg["listen"]["port"],
-            debug=True, threaded=True, processes=1)
+    app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
 
 
-
+# @todo: CORS whitelist origins
 # @todo: password change
 # @todo: hostname, nextcloud (http, https), listen
 # @todo: derive secret key -> machine-id (maybe only as flask-secret, not for hashing?)
