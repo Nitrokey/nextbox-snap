@@ -1,10 +1,31 @@
 import os
 import sys
 from pathlib import Path
-
 import yaml
 
+from flask import jsonify
+
+
 NEXTBOX_HDD_LABEL = "NextBoxHardDisk"
+
+
+def error(msg, data=None):
+    msg = [msg]
+    return jsonify({
+        "result": "error",
+        "msg": [msg],
+        "data": data
+    })
+
+def success(msg=None, data=None):
+    msg = [msg] if msg else []
+    return jsonify({
+        "result": "success",
+        "msg": msg,
+        "data": data
+    })
+
+
 
 def load_config(config_path):
     """load config in given 'config_path' or return default"""
@@ -12,15 +33,14 @@ def load_config(config_path):
     if not os.path.exists(config_path):
         print(f"config path: {config_path} not found, returning default")
         return {
-            "password": None,
-            "user": None,
-            "backup": {
-                "last": None,
-                "mount": None
+            "token": {
+                "value": None,
+                "created": None,
+                "ip": None
             },
-            "listen": {
-                "host": "0.0.0.0",
-                "port": 18585,
+            "backup": {
+                "last_backup": None,
+                "last_restore": None
             },
             "nextcloud": {
                 "http_port": 80,
@@ -44,6 +64,7 @@ def get_partitions():
     alldevs = os.listdir("/dev/")
     alllabels = os.listdir("/dev/disk/by-label")
 
+    # mounted: <dev> => <mount-point>
     out = {
         "available": [],
         "mounted": {},
