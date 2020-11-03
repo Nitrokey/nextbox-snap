@@ -6,6 +6,7 @@ from functools import wraps
 import select
 import time
 import threading
+import shutil
 
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
@@ -213,8 +214,6 @@ def check_for_backup_process():
                 continue
             break
 
-        print(line)
-
         # handle exporting line step
         if toks[0].lower() == "exporting" and len(toks) > 1:
             backup_state["step"] = toks[1].replace(".", "")
@@ -227,6 +226,9 @@ def check_for_backup_process():
 
         elif len(toks) >= 3 and toks[0].lower() == "successfully":
             backup_state["success"] = " ".join(toks[2:])
+
+        elif len(toks) >= 3 and toks[0].lower() == "unable":
+            backup_state["unable"] = toks[-1]
 
         # handle progress (how many files are already done)
         elif len(toks) > 1 and "=" in toks[-1]:
@@ -250,7 +252,10 @@ def check_for_backup_process():
             out["last_" + backup_state["what"]] = backup_state["when"]
 
         else:
-            state = "failed"
+            state = "failed: " + backup_state.get("unable", "")
+            if "target" in backup_state:
+                shutil.rmtree(backup_state["target"])
+                # @todo: log output
 
         out = dict(backup_state)
         out["state"] = state
@@ -276,8 +281,7 @@ def backup():
     if get_partitions()["backup"] is not None:
         for name in os.listdir("/media/backup"):
             p = Path("/media/backup") / name
-            # @todo: get size from p / "size"
-            size = "1MB"
+            size = (p / "size").open().read().strip().split()[0]
             data["found"].append({
                 "name": name,
                 "created": p.stat().st_ctime,
@@ -357,12 +361,13 @@ if __name__ == "__main__":
 # @todo: logging!=!==!
 # @todo: check for backup operation if unmounting backup
 # @todo: move backup/restore line parsing to utils.py
-# @todo: how to show the backup/restore progress during the maintainance mode
+# @todo: how to show the backup/restore progress during the maintainance mode (partly done)
 # @todo: how to handle removed harddrive without prior umounting...
 # @todo: JS: show filesystem type
+# @todo: forward all API calls using PHP
 
 # @todo: better handle missing origin
-
+# @todo: default extra-apps to install during setup (nextcloud-nextbox)
 
 #### done:
 # @todo: append sys.paths
