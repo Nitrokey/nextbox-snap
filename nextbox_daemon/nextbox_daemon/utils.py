@@ -2,8 +2,12 @@ import os
 import sys
 from pathlib import Path
 import yaml
+import logging
 
 from flask import jsonify
+
+
+log = logging.getLogger("utils")
 
 
 NEXTBOX_HDD_LABEL = "NextBoxHardDisk"
@@ -17,6 +21,7 @@ def error(msg, data=None):
         "data": data
     })
 
+
 def success(msg=None, data=None):
     msg = [msg] if msg else []
     return jsonify({
@@ -24,7 +29,6 @@ def success(msg=None, data=None):
         "msg": msg,
         "data": data
     })
-
 
 
 def load_config(config_path):
@@ -54,11 +58,13 @@ def load_config(config_path):
 
     return cfg
 
+
 def save_config(cfg, config_path):
     """save config to given 'config_path'"""
 
     with open(config_path, "w") as fd:
         yaml.safe_dump(cfg, fd)
+
 
 def get_partitions():
     alldevs = os.listdir("/dev/")
@@ -96,3 +102,50 @@ def get_partitions():
                 elif mountpoint == "/media/nextcloud":
                     out["main"] = dev
     return out
+
+def parse_backup_line(line, dct_data):
+    toks = line.split()
+    if len(toks) == 0:
+        return
+
+    # handle exporting line step
+    if toks[0].lower() == "exporting" and len(toks) > 1:
+        dct_data["step"] = toks[1].replace(".", "")
+        if dct_data["step"] == "init":
+            dct_data["target"] = " ".join(toks[2:])[1:-1]
+
+    # handle importing line step
+    elif toks[0].lower() == "importing" and len(toks) > 1:
+        dct_data["step"] = toks[1].replace(".", "")
+
+    elif len(toks) >= 3 and toks[0].lower() == "successfully":
+        dct_data["success"] = " ".join(toks[2:])
+
+    elif len(toks) >= 3 and toks[0].lower() == "unable":
+        dct_data["unable"] = toks[-1]
+
+    # handle progress (how many files are already done)
+    elif len(toks) > 1 and "=" in toks[-1]:
+        subtoks = toks[-1].split("=")
+        if len(subtoks) > 1:
+            try:
+                lhs, rhs = subtoks[-1][:-1].split("/")
+                ratio = (1 - (int(lhs) / int(rhs))) * 100
+                dct_data["progress"] = f"{ratio:.1f}"
+            except ValueError:
+                dct_data["progress"] = None
+
+
+def tail(filepath, num_lines=20):
+    p = Path(filepath)
+    try:
+        lines = p.read_text("utf-8").split("\n")
+        if num_lines is None or num_lines < 0:
+            return lines
+        return lines[-num_lines:]
+    except OSError as e:
+        log.error(f"read from file {filepath} failed, exception: {e}")
+        return None
+
+
+

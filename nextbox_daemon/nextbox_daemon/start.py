@@ -11,19 +11,42 @@ import shutil
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 
+import logging
+import logging.handlers
+
 import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
 from utils import load_config, save_config, get_partitions, error, success, \
-    NEXTBOX_HDD_LABEL
+    NEXTBOX_HDD_LABEL, tail, parse_backup_line
 
+from command_runner import CommandRunner
+
+# @todo: remove token in favor of php-forwarding (or keep it for later use)
+MAX_TOKEN_AGE = 60 * 5
+MAX_LOG_SIZE = 2**30
 
 CONFIG_PATH = "/var/snap/nextbox/current/nextbox.conf"
-#CONFIG_PATH = "/tmp/nextbox.conf"
+LOG_FILENAME = "/var/snap/nextbox/current/nextbox.log"
+DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.conf"
+DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
+DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
 
-MAX_TOKEN_AGE = 60 * 5
+# logger setup + rotating file handler
+log = logging.getLogger("nextbox")
+log.setLevel(logging.DEBUG)
+log_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILENAME, maxBytes=MAX_LOG_SIZE, backupCount=5)
+log.addHandler(log_handler)
+log_format = logging.Formatter("{asctime} {name} {levelname}\n"
+                       "    {message}", style='{')
+log_handler.setFormatter(log_format)
 
+log.info("starting nextbox-daemon")
+
+
+# config load
 cfg = load_config(CONFIG_PATH)
 
 app = Flask(__name__)
@@ -31,7 +54,7 @@ app.secret_key = "123456-nextbox-123456" #cfg["secret_key"]
 
 # backup thread handler
 backup_proc = None
-backup_state = {}
+#backup_state = {}
 
 #@app.before_request
 #def limit_remote_addr():
@@ -88,7 +111,14 @@ def show_overview():
         "storage": get_partitions(),
         "backup": check_for_backup_process()
     })
-    
+
+@app.route("/log")
+@app.route("/log/<num_lines>")
+def show_log(num_lines=20):
+    ret = tail(LOG_FILENAME, num_lines)
+    return error(f"could not read log: {LOG_FILENAME}") if ret is None \
+        else success(data=ret)
+
 @app.route("/token/<token>/<allow_ip>")
 def set_token(token, allow_ip):
 
@@ -143,16 +173,8 @@ def mount_storage(device, name):
     if not os.path.exists(mount_target):
         os.makedirs(mount_target)
 
-    try:
-        ret = subprocess.check_call(["mount", mount_device, mount_target])
-    except subprocess.CalledProcessError as e:
-        ret = e.returncode
-
-    if ret != 0:
-        return error(f"mount {mount_device} to {mount_target} failed (retcode: {ret})")
-
-    return success(f"mounting successful ({mount_target})")
-
+    cr = CommandRunner(["mount", mount_device, mount_target], block=True)
+    return success(cr.info(), data=cr.output)
 
 @app.route("/storage/umount/<name>")
 @requires_auth
@@ -169,105 +191,38 @@ def umount_storage(name):
     if mount_target not in parts["mounted"].values():
         return error("not mounted")
 
-    try:
-        ret = subprocess.check_call(["umount", mount_target])
-    except subprocess.CalledProcessError as e:
-        ret = e.returncode
-    if ret != 0:
-        return error(f"umounting {mount_target} failed (retcode: {ret})")
-
-    return success(f"unmounting successful ({mount_target})")
-
+    cr = CommandRunner(["umount", mount_target], block=True)
+    return success(cr.info(), data=cr.output)
 
 def check_for_backup_process():
-    global backup_proc, backup_state
+    global backup_proc
 
     out = dict(cfg["backup"])
     if backup_proc is None:
-        out["running"] =  False
+        out["running"] = False
         return out
 
-    assert isinstance(backup_proc, subprocess.Popen)
+    assert isinstance(backup_proc, CommandRunner)
 
-    #for proc in psutil.process_iter():
-    #    if proc.name() in ["export-data", "import-data"]:
-    #        out["what"] = proc.name()
-    #        out["started"] = proc.create_time()
-
-    sel = select.poll()
-    sel.register(backup_proc.stdout, select.POLLIN)
-
-    line = None
-    empty_line = False
-    while line != b"":
-        # max wait in milliseconds for new inputs
-        if not sel.poll(1):
-            break
-
-        line = backup_proc.stdout.readline().decode("utf-8")
-        toks = line.strip().split(r"\b")[-1].split()
-
-        # empty line (we skip the 1st, but a 2nd leads to a break)
-        if len(toks) == 0:
-            if not empty_line:
-                empty_line = True
-                continue
-            break
-
-        # handle exporting line step
-        if toks[0].lower() == "exporting" and len(toks) > 1:
-            backup_state["step"] = toks[1].replace(".", "")
-            if backup_state["step"] == "init":
-                backup_state["target"] = " ".join(toks[2:])[1:-1]
-
-        # handle importing line step
-        elif toks[0].lower() == "importing" and len(toks) > 1:
-            backup_state["step"] = toks[1].replace(".", "")
-
-        elif len(toks) >= 3 and toks[0].lower() == "successfully":
-            backup_state["success"] = " ".join(toks[2:])
-
-        elif len(toks) >= 3 and toks[0].lower() == "unable":
-            backup_state["unable"] = toks[-1]
-
-        # handle progress (how many files are already done)
-        elif len(toks) > 1 and "=" in toks[-1]:
-            subtoks = toks[-1].split("=")
-            if len(subtoks) > 1:
-                try:
-                    lhs, rhs = subtoks[-1][:-1].split("/")
-                    ratio = (1 - (int(lhs) / int(rhs))) * 100
-                    backup_state["progress"] = f"{ratio:.1f}"
-                except ValueError:
-                    backup_state["progress"] = None
-
-    # check if we are already done
-    if backup_proc.poll() is not None:
-        ret = backup_proc.poll()
-
-        if ret == 0:
-            state = "finished"
-            cfg["backup"]["last_" + backup_state["what"]] = backup_state["when"]
+    if backup_proc.finished:
+        if backup_proc.returncode == 0:
+            backup_proc.parsed["state"] = "finished"
+            cfg["backup"]["last_" + backup_proc.user_info] = backup_proc.started
             save_config(cfg, CONFIG_PATH)
-            out["last_" + backup_state["what"]] = backup_state["when"]
-
+            out["last_" + backup_proc.user_info] = backup_proc.started
+            log.info("backup/restore process finished successfully")
         else:
-            state = "failed: " + backup_state.get("unable", "")
-            if "target" in backup_state:
-                shutil.rmtree(backup_state["target"])
-                # @todo: log output
+            backup_proc.parsed["state"] = "failed: " + backup_proc.parsed.get("unable", "")
+            if "target" in backup_proc.parsed:
+                shutil.rmtree(backup_proc.parsed["target"])
+                log.error("backup/restore process failed, logging output: ")
+                for line in backup_proc.output:
+                    log.error(line)
 
-        out = dict(backup_state)
-        out["state"] = state
-        out["returncode"] = ret
-        out["running"] = False
-
-        backup_proc = None
-        backup_state = {}
-    else:
-        out = dict(backup_state)
-        out["running"] = True
-
+    out.update(dict(backup_proc.parsed))
+    out["returncode"] = backup_proc.returncode
+    out["running"] = backup_proc.running
+    out["what"] = backup_proc.user_info
     return out
 
 
@@ -315,11 +270,15 @@ def backup_start():
     if not parts["backup"]:
         return error("no 'backup' storage mounted")
 
-    backup_proc = subprocess.Popen(["nextcloud-nextbox.export"],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    #backup_proc = subprocess.Popen(,
+    #    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    backup_state["what"] = "backup"
-    backup_state["when"] = time.time()
+    backup_proc = CommandRunner(["nextcloud-nextbox.export"],
+        cb_parse=parse_backup_line, block=False)
+    backup_proc.user_info = "backup"
+
+    #backup_state["what"] = "backup"
+    #backup_state["when"] = time.time()
 
     return success("backup started", data=backup_info)
 
@@ -337,13 +296,41 @@ def backup_restore(name):
         return error("backup/restore operation already running", data=backup_info)
 
     directory = f"/media/backup/{name}"
-    backup_proc = subprocess.Popen(["nextcloud-nextbox.import", directory],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    backup_proc = CommandRunner(["nextcloud-nextbox.import", directory],
+        cb_parse=parse_backup_line, block=False)
+    backup_proc.user_info = "restore"
 
-    backup_state["what"] = "restore"
-    backup_state["when"] = time.time()
+    #backup_state["what"] = "restore"
+    #backup_state["when"] = time.time()
 
     return success("restore started", data=backup_info)
+
+
+
+@app.route("/service/<name>/<operation>")
+#@requires_auth
+def service_operation(name, operation):
+    if name not in ["ddclient"]:
+        return error("not allowed")
+    if operation not in ["stop", "start", "restart", "status"]:
+        return error("not allowed")
+
+    if name == "ddclient":
+        cr = CommandRunner(["systemctl", operation, DDCLIENT_SERVICE], block=True)
+        return success(f"service '{name}' => {operation} return-code: {cr.returncode}",
+                       data=cr.output)
+
+    return error("not allowed")
+
+
+@app.route("/ddclient/config")
+@requires_auth
+def ddclient_config():
+    if request.method == 'GET':
+
+        pass
+    if request.method == 'POST':
+        form_data = request.form
 
 
 if __name__ == "__main__":
@@ -358,7 +345,7 @@ if __name__ == "__main__":
 # @todo: handle multiple backup processes (needed?)
 # @todo: validate (mount) name (partly done, enough?)
 # @fixme: thread-locks ?
-# @todo: logging!=!==!
+
 # @todo: check for backup operation if unmounting backup
 # @todo: move backup/restore line parsing to utils.py
 # @todo: how to show the backup/restore progress during the maintainance mode (partly done)
@@ -369,6 +356,12 @@ if __name__ == "__main__":
 # @todo: better handle missing origin
 # @todo: default extra-apps to install during setup (nextcloud-nextbox)
 
+
 #### done:
 # @todo: append sys.paths
 # @todo: decorate with requires_auth
+# @todo: logging!=!==! (jap use logging + log.bla(iofje))
+# @todo: "executor"-class or handler, two types currently, should be just one with:
+#        - background job (Popen)
+#        - read/digest all outputs (Popen + select)
+#        - get returncode + non-blocking
