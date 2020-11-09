@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 import yaml
 import logging
+import socket
 
 from flask import jsonify
 
 
-log = logging.getLogger("utils")
+log = logging.getLogger("nextbox")
 
 
 NEXTBOX_HDD_LABEL = "NextBoxHardDisk"
@@ -50,6 +51,8 @@ def load_config(config_path):
                 "http_port": 80,
                 "https_port": None,
                 "hostname": "NextBox",
+                "trusted_domains": None
+
             }
         }
 
@@ -58,13 +61,15 @@ def load_config(config_path):
 
     return cfg
 
-
 def save_config(cfg, config_path):
     """save config to given 'config_path'"""
 
     with open(config_path, "w") as fd:
         yaml.safe_dump(cfg, fd)
 
+
+def local_ip():
+    return socket.gethostbyname(socket.gethostname())
 
 def get_partitions():
     alldevs = os.listdir("/dev/")

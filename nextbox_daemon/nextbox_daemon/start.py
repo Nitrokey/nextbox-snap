@@ -7,6 +7,7 @@ import select
 import time
 import threading
 import shutil
+import socket
 
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
@@ -18,13 +19,13 @@ import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
-from utils import load_config, save_config, get_partitions, error, success, \
-    NEXTBOX_HDD_LABEL, tail, parse_backup_line
+from nextbox_daemon.utils import load_config, save_config, get_partitions, error, \
+    success, NEXTBOX_HDD_LABEL, tail, parse_backup_line
 
-from command_runner import CommandRunner
+from nextbox_daemon.command_runner import CommandRunner
 
 # @todo: remove token in favor of php-forwarding (or keep it for later use)
-MAX_TOKEN_AGE = 60 * 5
+#MAX_TOKEN_AGE = 60 * 5
 MAX_LOG_SIZE = 2**30
 
 CONFIG_PATH = "/var/snap/nextbox/current/nextbox.conf"
@@ -39,8 +40,7 @@ log.setLevel(logging.DEBUG)
 log_handler = logging.handlers.RotatingFileHandler(
         LOG_FILENAME, maxBytes=MAX_LOG_SIZE, backupCount=5)
 log.addHandler(log_handler)
-log_format = logging.Formatter("{asctime} {name} {levelname}\n"
-                       "    {message}", style='{')
+log_format = logging.Formatter("{asctime} {module} {levelname} => {message}", style='{')
 log_handler.setFormatter(log_format)
 
 log.info("starting nextbox-daemon")
@@ -54,7 +54,6 @@ app.secret_key = "123456-nextbox-123456" #cfg["secret_key"]
 
 # backup thread handler
 backup_proc = None
-#backup_state = {}
 
 #@app.before_request
 #def limit_remote_addr():
@@ -92,15 +91,10 @@ def after_request_func(response):
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # no auth token: 403
-        if cfg["token"]["value"] is None:
+        if request.remote_addr != "127.0.0.1":
+            # abort(403)
             return error("not allowed")
-        # auth token too old: 403
-        if time.time() - cfg["token"]["created"] > MAX_TOKEN_AGE:
-            return error("not allowed")
-        # check for proper token
-        if cfg["token"]["value"] != request.args.get("token"):
-            return error("not allowed")
+
         return f(*args, **kwargs)
     return decorated
 
@@ -112,26 +106,30 @@ def show_overview():
         "backup": check_for_backup_process()
     })
 
+
 @app.route("/log")
 @app.route("/log/<num_lines>")
-def show_log(num_lines=20):
+@requires_auth
+def show_log(num_lines=50):
     ret = tail(LOG_FILENAME, num_lines)
     return error(f"could not read log: {LOG_FILENAME}") if ret is None \
-        else success(data=ret)
+        else success(data=ret[:-1])
 
-@app.route("/token/<token>/<allow_ip>")
-def set_token(token, allow_ip):
 
-    if request.remote_addr != "127.0.0.1":
-        #abort(403)
-        return error("not allowed")
-
-    cfg["token"]["value"] = token
-    cfg["token"]["created"] = time.time()
-    cfg["token"]["ip"] = allow_ip
-    save_config(cfg, CONFIG_PATH)
-
-    return success()
+#
+# @app.route("/token/<token>/<allow_ip>")
+# def set_token(token, allow_ip):
+#
+#     if request.remote_addr != "127.0.0.1":
+#         #abort(403)
+#         return error("not allowed")
+#
+#     cfg["token"]["value"] = token
+#     cfg["token"]["created"] = time.time()
+#     cfg["token"]["ip"] = allow_ip
+#     save_config(cfg, CONFIG_PATH)
+#
+#     return success()
 
 
 @app.route("/storage")
@@ -204,7 +202,14 @@ def check_for_backup_process():
 
     assert isinstance(backup_proc, CommandRunner)
 
-    if backup_proc.finished:
+    ### ############
+    #################
+    ############## HERE FIRST PARSE...
+
+    ##### REWORK THIS
+
+
+    if backup_proc and backup_proc.finished:
         if backup_proc.returncode == 0:
             backup_proc.parsed["state"] = "finished"
             cfg["backup"]["last_" + backup_proc.user_info] = backup_proc.started
@@ -214,15 +219,21 @@ def check_for_backup_process():
         else:
             backup_proc.parsed["state"] = "failed: " + backup_proc.parsed.get("unable", "")
             if "target" in backup_proc.parsed:
-                shutil.rmtree(backup_proc.parsed["target"])
+                if os.path.exists(backup_proc.parsed["target"]):
+                    shutil.rmtree(backup_proc.parsed["target"])
                 log.error("backup/restore process failed, logging output: ")
-                for line in backup_proc.output:
-                    log.error(line)
+                for line in backup_proc.output[-30:]:
+                    log.error(line.replace("\n", ""))
 
-    out.update(dict(backup_proc.parsed))
-    out["returncode"] = backup_proc.returncode
-    out["running"] = backup_proc.running
-    out["what"] = backup_proc.user_info
+    if backup_proc:
+        out.update(dict(backup_proc.parsed))
+        out["returncode"] = backup_proc.returncode
+        out["running"] = backup_proc.running
+        out["what"] = backup_proc.user_info
+
+        if backup_proc.finished:
+            backup_proc = None
+
     return out
 
 
@@ -236,7 +247,11 @@ def backup():
     if get_partitions()["backup"] is not None:
         for name in os.listdir("/media/backup"):
             p = Path("/media/backup") / name
-            size = (p / "size").open().read().strip().split()[0]
+            try:
+                size =  (p / "size").open().read().strip().split()[0]
+            except FileNotFoundError:
+                size = 0
+
             data["found"].append({
                 "name": name,
                 "created": p.stat().st_ctime,
@@ -270,15 +285,9 @@ def backup_start():
     if not parts["backup"]:
         return error("no 'backup' storage mounted")
 
-    #backup_proc = subprocess.Popen(,
-    #    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
     backup_proc = CommandRunner(["nextcloud-nextbox.export"],
         cb_parse=parse_backup_line, block=False)
     backup_proc.user_info = "backup"
-
-    #backup_state["what"] = "backup"
-    #backup_state["when"] = time.time()
 
     return success("backup started", data=backup_info)
 
@@ -300,19 +309,15 @@ def backup_restore(name):
         cb_parse=parse_backup_line, block=False)
     backup_proc.user_info = "restore"
 
-    #backup_state["what"] = "restore"
-    #backup_state["when"] = time.time()
-
     return success("restore started", data=backup_info)
 
 
-
 @app.route("/service/<name>/<operation>")
-#@requires_auth
+@requires_auth
 def service_operation(name, operation):
     if name not in ["ddclient"]:
         return error("not allowed")
-    if operation not in ["stop", "start", "restart", "status"]:
+    if operation not in ["stop", "start", "restart", "status", "is-active"]:
         return error("not allowed")
 
     if name == "ddclient":
@@ -323,15 +328,25 @@ def service_operation(name, operation):
     return error("not allowed")
 
 
-@app.route("/ddclient/config")
+@app.route("/ddclient/test")
+@requires_auth
+def ddclient_test():
+    cr = CommandRunner(["ddclient-snap.exec", "-verbose", "-foreground", "-force"], block=True)
+    cr.log_output()
+    return success("ddclient test finished, check daemon-log")
+
+
+@app.route("/ddclient/config", methods=["POST", "GET"])
 @requires_auth
 def ddclient_config():
-    if request.method == 'GET':
+    if request.method == "GET":
+        content = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8")
+        return success("ddclient config loaded", data=content.split("\n"))
 
-        pass
-    if request.method == 'POST':
+    elif request.method == "POST":
         form_data = request.form
-
+        Path(DDCLIENT_CONFIG_PATH).write_text(form_data.get("content"), "utf-8")
+        return success("ddclient config saved")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
@@ -347,15 +362,16 @@ if __name__ == "__main__":
 # @fixme: thread-locks ?
 
 # @todo: check for backup operation if unmounting backup
-# @todo: move backup/restore line parsing to utils.py
 # @todo: how to show the backup/restore progress during the maintainance mode (partly done)
 # @todo: how to handle removed harddrive without prior umounting...
 # @todo: JS: show filesystem type
-# @todo: forward all API calls using PHP
 
 # @todo: better handle missing origin
 # @todo: default extra-apps to install during setup (nextcloud-nextbox)
 
+# @todo: check for maintainance mode on startup and switch off
+
+# @todo: deliver own jquery
 
 #### done:
 # @todo: append sys.paths
@@ -365,3 +381,6 @@ if __name__ == "__main__":
 #        - background job (Popen)
 #        - read/digest all outputs (Popen + select)
 #        - get returncode + non-blocking
+# @todo: forward all API calls using PHP
+# @todo: move backup/restore line parsing to utils.py
+

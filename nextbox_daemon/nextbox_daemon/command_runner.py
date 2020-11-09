@@ -4,7 +4,7 @@ import logging
 import queue
 import time
 
-log = logging.getLogger("command_runner")
+log = logging.getLogger("nextbox")
 
 
 class CommandRunner:
@@ -48,6 +48,7 @@ class CommandRunner:
                 log.debug("blocking-cmd timeout (10secs)")
 
         self._handle_stdout_stream(poll_block_ms=1000)
+        log.debug("blocking call finished")
         return True
 
     def _handle_stdout_stream(self, poll_block_ms=1):
@@ -106,6 +107,12 @@ class CommandRunner:
 
     def info(self):
         return f"cmd: {self.cmd}, returncode: {self.returncode}"
+
+    def log_output(self):
+        log.info(f"#### log output for command: {self.cmd}")
+        for line in self.output:
+            log.info(line)
+        log.info(f"#### log output end")
 
     @property
     def output(self):
