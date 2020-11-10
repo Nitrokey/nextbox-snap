@@ -20,7 +20,7 @@ from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
 from nextbox_daemon.utils import load_config, save_config, get_partitions, error, \
-    success, NEXTBOX_HDD_LABEL, tail, parse_backup_line
+    success, NEXTBOX_HDD_LABEL, tail, parse_backup_line, local_ip
 
 from nextbox_daemon.command_runner import CommandRunner
 
@@ -340,13 +340,46 @@ def ddclient_test():
 @requires_auth
 def ddclient_config():
     if request.method == "GET":
-        content = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8")
-        return success("ddclient config loaded", data=content.split("\n"))
+        data = dict(cfg["nextcloud"])
+        data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
+        return success("ddclient config loaded", data=data)
 
     elif request.method == "POST":
-        form_data = request.form
-        Path(DDCLIENT_CONFIG_PATH).write_text(form_data.get("content"), "utf-8")
+        for key in request.form:
+            val = request.form.get(key)
+            if key == "conf":
+                Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
+            elif key == "domain" and len(request.form.get(key, "")) > 0:
+                cfg["nextcloud"]["domain"] = val
+                update_trusted_domains(cfg["nextcloud"]["domain"])
+                save_config(cfg, CONFIG_PATH)
+            elif key == "email" and len(request.form.get(key, "")) > 0:
+                cfg["nextcloud"]["email"] = val
+                save_config(cfg, CONFIG_PATH)
+
         return success("ddclient config saved")
+
+
+def update_trusted_domains(external_domain=None, force_update=False):
+    get_cmd = lambda: ["nextcloud-nextbox.occ", "config:system:get", "trusted_domains"]
+    my_ip = local_ip()
+    set_cmd = lambda idx, val: ["nextcloud-nextbox.occ", "config:system:set",
+                                "trusted_domains", str(idx), "--value", val]
+
+    cr = CommandRunner(get_cmd(), block=True)
+    trusted_domains = [line.strip() for line in cr.output if len(line.strip()) > 0]
+
+    if not my_ip in trusted_domains:
+        log.critical(f"LOCAL IP NOT IN trusted_domains: {trusted_domains}")
+
+    if external_domain not in trusted_domains:
+
+        cr = CommandRunner(set_cmd(len(trusted_domains), external_domain), block=True)
+        # don't forget ... cr.output @fixme
+        log.info(f"adding {external_domain} to 'trusted_domains'")
+
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
@@ -372,6 +405,12 @@ if __name__ == "__main__":
 # @todo: check for maintainance mode on startup and switch off
 
 # @todo: deliver own jquery
+
+# @fixme: check (ddclient+let's crypt) domain validity!
+# @fixme: check (ddclient+let's crypt) email validity!
+
+# @fixme: trusted_domain management (only allow one? cleanup? only 0 is default?!)
+
 
 #### done:
 # @todo: append sys.paths

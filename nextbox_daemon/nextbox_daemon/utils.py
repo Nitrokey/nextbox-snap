@@ -38,11 +38,6 @@ def load_config(config_path):
     if not os.path.exists(config_path):
         print(f"config path: {config_path} not found, returning default")
         return {
-            "token": {
-                "value": None,
-                "created": None,
-                "ip": None
-            },
             "backup": {
                 "last_backup": None,
                 "last_restore": None
@@ -51,8 +46,8 @@ def load_config(config_path):
                 "http_port": 80,
                 "https_port": None,
                 "hostname": "NextBox",
-                "trusted_domains": None
-
+                "domain": None,
+                "email": None
             }
         }
 
