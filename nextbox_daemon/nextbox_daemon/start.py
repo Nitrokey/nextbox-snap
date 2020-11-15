@@ -1,13 +1,16 @@
 import os
 import sys
 from pathlib import Path
-import subprocess
 from functools import wraps
+
 import select
 import time
 import threading
+import subprocess
+
 import shutil
 import socket
+import urllib.request
 
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
@@ -19,23 +22,15 @@ import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
-from nextbox_daemon.utils import load_config, save_config, get_partitions, error, \
-    success, NEXTBOX_HDD_LABEL, tail, parse_backup_line, local_ip
+from nextbox_daemon.utils import get_partitions, error, success, \
+    tail, parse_backup_line, local_ip
 
 from nextbox_daemon.command_runner import CommandRunner
-
-# @todo: remove token in favor of php-forwarding (or keep it for later use)
-#MAX_TOKEN_AGE = 60 * 5
-MAX_LOG_SIZE = 2**30
-
-CONFIG_PATH = "/var/snap/nextbox/current/nextbox.conf"
-LOG_FILENAME = "/var/snap/nextbox/current/nextbox.log"
-DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.conf"
-DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
-DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
+from nextbox_daemon.consts import *
+from nextbox_daemon.config import Config
 
 # logger setup + rotating file handler
-log = logging.getLogger("nextbox")
+log = logging.getLogger(LOGGER_NAME)
 log.setLevel(logging.DEBUG)
 log_handler = logging.handlers.RotatingFileHandler(
         LOG_FILENAME, maxBytes=MAX_LOG_SIZE, backupCount=5)
@@ -47,7 +42,7 @@ log.info("starting nextbox-daemon")
 
 
 # config load
-cfg = load_config(CONFIG_PATH)
+cfg = Config(CONFIG_PATH)
 
 app = Flask(__name__)
 app.secret_key = "123456-nextbox-123456" #cfg["secret_key"]
@@ -101,7 +96,7 @@ def requires_auth(f):
 
 @app.route("/overview")
 def show_overview():
-    return jsonify({
+    return success(data={
         "storage": get_partitions(),
         "backup": check_for_backup_process()
     })
@@ -139,16 +134,29 @@ def storage():
     return success(data=parts)
 
 
+@app.route("/storage/mount/<device>")
 @app.route("/storage/mount/<device>/<name>")
 @requires_auth
-def mount_storage(device, name):
+def mount_storage(device, name=None):
+    parts = get_partitions()
+
+    if name is None:
+        print (parts)
+        for idx in range(1, 11):
+            _name = f"extra-{idx}"
+            mount_target = f"/media/{_name}"
+            if mount_target not in parts["mounted"].values():
+                name = _name
+                print(name)
+                break
+
+        if name is None:
+            return error("cannot determine mount target, too many mounts?")
 
     if ".." in device or "/" in device or name == "nextcloud":
         return error("invalid device")
     if ".." in name or "/" in name:
         return error("invalid name")
-
-    parts = get_partitions()
 
     mount_target = f"/media/{name}"
     mount_device = None
@@ -172,7 +180,11 @@ def mount_storage(device, name):
         os.makedirs(mount_target)
 
     cr = CommandRunner(["mount", mount_device, mount_target], block=True)
-    return success(cr.info(), data=cr.output)
+    if cr.returncode == 0:
+        return success("Mounting successful", data=cr.output)
+    else:
+        cr.log_output()
+        return error("Failed mounting, check logs...")
 
 @app.route("/storage/umount/<name>")
 @requires_auth
@@ -190,7 +202,7 @@ def umount_storage(name):
         return error("not mounted")
 
     cr = CommandRunner(["umount", mount_target], block=True)
-    return success(cr.info(), data=cr.output)
+    return success("Unmounting successful", data=cr.output)
 
 def check_for_backup_process():
     global backup_proc
@@ -202,18 +214,16 @@ def check_for_backup_process():
 
     assert isinstance(backup_proc, CommandRunner)
 
-    ### ############
-    #################
-    ############## HERE FIRST PARSE...
+    backup_proc.get_new_output()
 
-    ##### REWORK THIS
-
-
-    if backup_proc and backup_proc.finished:
+    if backup_proc.finished:
         if backup_proc.returncode == 0:
             backup_proc.parsed["state"] = "finished"
+
             cfg["backup"]["last_" + backup_proc.user_info] = backup_proc.started
-            save_config(cfg, CONFIG_PATH)
+            cfg.save()
+
+
             out["last_" + backup_proc.user_info] = backup_proc.started
             log.info("backup/restore process finished successfully")
         else:
@@ -225,14 +235,14 @@ def check_for_backup_process():
                 for line in backup_proc.output[-30:]:
                     log.error(line.replace("\n", ""))
 
-    if backup_proc:
-        out.update(dict(backup_proc.parsed))
-        out["returncode"] = backup_proc.returncode
-        out["running"] = backup_proc.running
-        out["what"] = backup_proc.user_info
 
-        if backup_proc.finished:
-            backup_proc = None
+    out.update(dict(backup_proc.parsed))
+    out["returncode"] = backup_proc.returncode
+    out["running"] = backup_proc.running
+    out["what"] = backup_proc.user_info
+
+    if backup_proc.finished:
+        backup_proc = None
 
     return out
 
@@ -322,19 +332,76 @@ def service_operation(name, operation):
 
     if name == "ddclient":
         cr = CommandRunner(["systemctl", operation, DDCLIENT_SERVICE], block=True)
-        return success(f"service '{name}' => {operation} return-code: {cr.returncode}",
-                       data=cr.output)
-
+        return success(data={
+            "service": name,
+            "operation": operation,
+            "return-code": cr.returncode,
+            "output": cr.output
+        })
     return error("not allowed")
 
 
-@app.route("/ddclient/test")
+@app.route("/ddclient/test/ddclient")
 @requires_auth
-def ddclient_test():
+def ddclient_test_ddclient():
     cr = CommandRunner(["ddclient-snap.exec", "-verbose", "-foreground", "-force"], block=True)
     cr.log_output()
-    return success("ddclient test finished, check daemon-log")
 
+    for line in cr.output:
+        if "SUCCESS:" in line:
+            return success("DDClient test: OK")
+    return error("DDClient test: Not OK, check logs...")
+
+
+@app.route("/ddclient/test/domain")
+@requires_auth
+def ddclient_test_domain():
+    domain = cfg["nextcloud"]["domain"]
+    try:
+        resolve_ip = socket.gethostbyname(domain)
+    except socket.gaierror as e:
+        log.error(f"Could not resolve {domain}")
+        log.error(f"Exception: {e}")
+        resolve_ip = None
+    ext_ip = urllib.request.urlopen(GET_EXT_IP_URL).read().decode("utf-8")
+
+    log.info(f"resolving '{domain}' to IP: {resolve_ip}, external IP: {ext_ip}")
+    if resolve_ip != ext_ip:
+        log.warning("Resolved IP does not match external IP")
+        log.warning("This might indicate a bad DynDNS configuration")
+        return error("Domain test: Not OK, check logs...")
+
+    return success("Domain test: OK")
+
+
+@app.route("/ddclient/enable")
+@requires_auth
+def https_enable():
+    domain = cfg.get("nextcloud", {}).get("domain")
+    email = cfg.get("nextcloud", {}).get("email")
+    if not domain or not email:
+        return error(f"failed, domain: '{domain}' email: '{email}'")
+
+    cmd = ["nextcloud-nextbox.enable-https", "lets-encrypt", email, domain]
+    cr = CommandRunner(cmd, block=True)
+    cr.log_output()
+
+    cfg["nextcloud"]["https_port"] = 443
+    cfg.save()
+
+    return success("HTTPS successfully activated")
+
+@app.route("/ddclient/disable")
+@requires_auth
+def https_disable():
+    cmd = ["nextcloud-nextbox.disable-https"]
+    cr = CommandRunner(cmd, block=True)
+    cr.log_output()
+
+    cfg["nextcloud"]["https_port"] = None
+    cfg.save()
+
+    return success("HTTPS disabled")
 
 @app.route("/ddclient/config", methods=["POST", "GET"])
 @requires_auth
@@ -342,22 +409,26 @@ def ddclient_config():
     if request.method == "GET":
         data = dict(cfg["nextcloud"])
         data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
-        return success("ddclient config loaded", data=data)
+        return success(data=data)
 
     elif request.method == "POST":
         for key in request.form:
             val = request.form.get(key)
             if key == "conf":
-                Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
+                old_conf = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8")
+                if old_conf != val:
+                    log.info("writing changed ddclient config and restarting service")
+                    Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
+                    service_operation("ddclient", "restart")
+
             elif key == "domain" and len(request.form.get(key, "")) > 0:
                 cfg["nextcloud"]["domain"] = val
                 update_trusted_domains(cfg["nextcloud"]["domain"])
-                save_config(cfg, CONFIG_PATH)
             elif key == "email" and len(request.form.get(key, "")) > 0:
                 cfg["nextcloud"]["email"] = val
-                save_config(cfg, CONFIG_PATH)
+            cfg.save()
 
-        return success("ddclient config saved")
+        return success("DDClient configuration saved")
 
 
 def update_trusted_domains(external_domain=None, force_update=False):
@@ -370,15 +441,14 @@ def update_trusted_domains(external_domain=None, force_update=False):
     trusted_domains = [line.strip() for line in cr.output if len(line.strip()) > 0]
 
     if not my_ip in trusted_domains:
-        log.critical(f"LOCAL IP NOT IN trusted_domains: {trusted_domains}")
+        log.critical(f"LOCAL IP ({my_ip}) NOT IN trusted_domains: {trusted_domains}")
 
     if external_domain not in trusted_domains:
-
-        cr = CommandRunner(set_cmd(len(trusted_domains), external_domain), block=True)
+        # always add at index 1, assuming 0 is the host-ip
+        cr = CommandRunner(set_cmd(1, external_domain), block=True)
+        cr.log_output()
         # don't forget ... cr.output @fixme
         log.info(f"adding {external_domain} to 'trusted_domains'")
-
-
 
 
 if __name__ == "__main__":
@@ -392,7 +462,9 @@ if __name__ == "__main__":
 # @todo: derive secret key -> machine-id (maybe only as flask-secret, not for hashing?)
 # @todo: handle multiple backup processes (needed?)
 # @todo: validate (mount) name (partly done, enough?)
-# @fixme: thread-locks ?
+# @fixme: thread-locks ? (JAP) + timer thread
+
+# @todo: check if storage still available...
 
 # @todo: check for backup operation if unmounting backup
 # @todo: how to show the backup/restore progress during the maintainance mode (partly done)

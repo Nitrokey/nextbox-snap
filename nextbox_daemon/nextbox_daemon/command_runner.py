@@ -4,7 +4,9 @@ import logging
 import queue
 import time
 
-log = logging.getLogger("nextbox")
+from nextbox_daemon.consts import LOGGER_NAME
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 class CommandRunner:
