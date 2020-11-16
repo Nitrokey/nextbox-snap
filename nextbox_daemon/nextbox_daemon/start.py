@@ -179,7 +179,7 @@ def mount_storage(device, name=None):
     if not os.path.exists(mount_target):
         os.makedirs(mount_target)
 
-    cr = CommandRunner(["mount", mount_device, mount_target], block=True)
+    cr = CommandRunner([MOUNT_BIN, mount_device, mount_target], block=True)
     if cr.returncode == 0:
         return success("Mounting successful", data=cr.output)
     else:
@@ -201,7 +201,7 @@ def umount_storage(name):
     if mount_target not in parts["mounted"].values():
         return error("not mounted")
 
-    cr = CommandRunner(["umount", mount_target], block=True)
+    cr = CommandRunner([UMOUNT_BIN, mount_target], block=True)
     return success("Unmounting successful", data=cr.output)
 
 def check_for_backup_process():
@@ -295,7 +295,7 @@ def backup_start():
     if not parts["backup"]:
         return error("no 'backup' storage mounted")
 
-    backup_proc = CommandRunner(["nextcloud-nextbox.export"],
+    backup_proc = CommandRunner([BACKUP_EXPORT_BIN],
         cb_parse=parse_backup_line, block=False)
     backup_proc.user_info = "backup"
 
@@ -315,7 +315,7 @@ def backup_restore(name):
         return error("backup/restore operation already running", data=backup_info)
 
     directory = f"/media/backup/{name}"
-    backup_proc = CommandRunner(["nextcloud-nextbox.import", directory],
+    backup_proc = CommandRunner([BACKUP_IMPORT_BIN, directory],
         cb_parse=parse_backup_line, block=False)
     backup_proc.user_info = "restore"
 
@@ -331,7 +331,7 @@ def service_operation(name, operation):
         return error("not allowed")
 
     if name == "ddclient":
-        cr = CommandRunner(["systemctl", operation, DDCLIENT_SERVICE], block=True)
+        cr = CommandRunner([SYSTEMCTL_BIN, operation, DDCLIENT_SERVICE], block=True)
         return success(data={
             "service": name,
             "operation": operation,
@@ -344,7 +344,7 @@ def service_operation(name, operation):
 @app.route("/ddclient/test/ddclient")
 @requires_auth
 def ddclient_test_ddclient():
-    cr = CommandRunner(["ddclient-snap.exec", "-verbose", "-foreground", "-force"], block=True)
+    cr = CommandRunner([DDCLIENT_BIN, "-verbose", "-foreground", "-force"], block=True)
     cr.log_output()
 
     for line in cr.output:
@@ -382,7 +382,7 @@ def https_enable():
     if not domain or not email:
         return error(f"failed, domain: '{domain}' email: '{email}'")
 
-    cmd = ["nextcloud-nextbox.enable-https", "lets-encrypt", email, domain]
+    cmd = [ENABLE_HTTPS_BIN, "lets-encrypt", email, domain]
     cr = CommandRunner(cmd, block=True)
     cr.log_output()
 
@@ -394,7 +394,7 @@ def https_enable():
 @app.route("/ddclient/disable")
 @requires_auth
 def https_disable():
-    cmd = ["nextcloud-nextbox.disable-https"]
+    cmd = [DISABLE_HTTPS_BIN]
     cr = CommandRunner(cmd, block=True)
     cr.log_output()
 
@@ -432,9 +432,9 @@ def ddclient_config():
 
 
 def update_trusted_domains(external_domain=None, force_update=False):
-    get_cmd = lambda: ["nextcloud-nextbox.occ", "config:system:get", "trusted_domains"]
+    get_cmd = lambda: [OCC_BIN, "config:system:get", "trusted_domains"]
     my_ip = local_ip()
-    set_cmd = lambda idx, val: ["nextcloud-nextbox.occ", "config:system:set",
+    set_cmd = lambda idx, val: [OCC_BIN, "config:system:set",
                                 "trusted_domains", str(idx), "--value", val]
 
     cr = CommandRunner(get_cmd(), block=True)

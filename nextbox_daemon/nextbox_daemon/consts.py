@@ -18,3 +18,16 @@ LOG_FILENAME = "/var/snap/nextbox/current/nextbox.log"
 DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.conf"
 DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
 DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
+
+SYSTEMCTL_BIN = "/bin/systemctl"
+
+
+ENABLE_HTTPS_BIN = "/snap/bin/nextcloud-nextbox.enable-https"
+DISABLE_HTTPS_BIN = "/snap/bin/nextcloud-nextbox.disable-https"
+BACKUP_EXPORT_BIN = "/snap/bin/nextcloud-nextbox.export"
+BACKUP_IMPORT_BIN = "/snap/bin/nextcloud-nextbox.import"
+
+
+OCC_BIN = "/snap/bin/nextcloud-nextbox.occ"
+MOUNT_BIN = "/bin/mount"
+UMOUNT_BIN = "/bin/umount"
