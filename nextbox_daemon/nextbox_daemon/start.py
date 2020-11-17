@@ -511,6 +511,9 @@ if __name__ == "__main__":
 
 # @todo: use gunicorn
 
+# @todo: customize initial set of apps
+
+# @todo: factory reset mechanism (needs threading.timer)
 
 
 #### done:

@@ -28,7 +28,7 @@ BACKUP_EXPORT_BIN = "/snap/bin/nextcloud-nextbox.export"
 BACKUP_IMPORT_BIN = "/snap/bin/nextcloud-nextbox.import"
 
 CERTBOT_CERTS_PATH = "/var/snap/nextcloud-nextbox/current/certs/certbot/config/live"
-CERTBOT_BACKUP_PATH = "/var/snap/nextcloud-nextbox/current/certs/certbot/config/live"
+CERTBOT_BACKUP_PATH = "/var/snap/nextcloud-nextbox/current/certs/certbot/config/live.bak"
 
 OCC_BIN = "/snap/bin/nextcloud-nextbox.occ"
 MOUNT_BIN = "/bin/mount"
