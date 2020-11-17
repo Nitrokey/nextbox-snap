@@ -401,6 +401,32 @@ def https_disable():
     cfg["nextcloud"]["https_port"] = None
     cfg.save()
 
+    # remove any certificates in live dir
+    bak = Path(CERTBOT_BACKUP_PATH)
+    src = Path(CERTBOT_CERTS_PATH)
+    if not bak.exists():
+        os.makedirs(bak.as_posix())
+        log.debug(f"creating certs backup directory: {bak}")
+
+    contents = os.listdir(src.as_posix())
+    if len(contents) > 1:
+        log.debug("need to clean up certs directory")
+
+    for path in contents:
+        if path == "README":
+            continue
+
+        full_src_path = src / path
+        full_bak_path = bak / path
+        idx = 1
+        while full_bak_path.exists():
+            full_bak_path = Path((bak / path).as_posix() + f".{idx}")
+            idx += 1
+
+        log.debug(f"moving old cert: {full_src_path} to {full_bak_path}")
+        shutil.move(full_src_path, full_bak_path)
+
+
     return success("HTTPS disabled")
 
 @app.route("/ddclient/config", methods=["POST", "GET"])
@@ -482,6 +508,9 @@ if __name__ == "__main__":
 # @fixme: check (ddclient+let's crypt) email validity!
 
 # @fixme: trusted_domain management (only allow one? cleanup? only 0 is default?!)
+
+# @todo: use gunicorn
+
 
 
 #### done:
