@@ -18,6 +18,8 @@ sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 import logging
 import logging.handlers
 
+from queue import Queue
+
 import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
@@ -28,6 +30,9 @@ from nextbox_daemon.utils import get_partitions, error, success, \
 from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.consts import *
 from nextbox_daemon.config import Config
+from nextbox_daemon.worker import Worker
+
+
 
 # logger setup + rotating file handler
 log = logging.getLogger(LOGGER_NAME)
@@ -478,5 +483,9 @@ def update_trusted_domains(external_domain=None, force_update=False):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
 
+    job_queue = Queue()
+    w = Worker(job_queue)
+    w.start()
+
+    app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
