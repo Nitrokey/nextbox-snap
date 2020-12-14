@@ -1,6 +1,10 @@
 import os
 import yaml
 
+import logging.handlers
+import logging
+
+from nextbox_daemon.consts import LOGGER_NAME, LOG_FILENAME, MAX_LOG_SIZE
 
 class Config(dict):
     def __init__(self, config_path, *va, **kw):
@@ -39,3 +43,14 @@ class Config(dict):
         with open(self.config_path, "w") as fd:
             yaml.safe_dump(dict(self), fd)
 
+
+# logger setup + rotating file handler
+log = logging.getLogger(LOGGER_NAME)
+log.setLevel(logging.DEBUG)
+log_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILENAME, maxBytes=MAX_LOG_SIZE, backupCount=5)
+log.addHandler(log_handler)
+log_format = logging.Formatter("{asctime} {module} {levelname} => {message}", style='{')
+log_handler.setFormatter(log_format)
+
+log.info("starting nextbox-daemon")

@@ -15,9 +15,6 @@ import urllib.request
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 
-import logging
-import logging.handlers
-
 from queue import Queue
 
 import psutil
@@ -29,21 +26,11 @@ from nextbox_daemon.utils import get_partitions, error, success, \
 
 from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.consts import *
-from nextbox_daemon.config import Config
+from nextbox_daemon.config import Config, log
 from nextbox_daemon.worker import Worker
+from nextbox_daemon.jobs import JobManager, TrustedDomainsJob
 
 
-
-# logger setup + rotating file handler
-log = logging.getLogger(LOGGER_NAME)
-log.setLevel(logging.DEBUG)
-log_handler = logging.handlers.RotatingFileHandler(
-        LOG_FILENAME, maxBytes=MAX_LOG_SIZE, backupCount=5)
-log.addHandler(log_handler)
-log_format = logging.Formatter("{asctime} {module} {levelname} => {message}", style='{')
-log_handler.setFormatter(log_format)
-
-log.info("starting nextbox-daemon")
 
 
 # config load
@@ -463,6 +450,15 @@ def ddclient_config():
 
 
 def update_trusted_domains(external_domain=None, force_update=False):
+
+    #
+    #
+    # @todo: with background thread, just send job to job_queue for this to update!
+    #
+    #
+
+
+
     get_cmd = lambda: [OCC_BIN, "config:system:get", "trusted_domains"]
     my_ip = local_ip()
     set_cmd = lambda idx, val: [OCC_BIN, "config:system:set",
@@ -484,8 +480,12 @@ def update_trusted_domains(external_domain=None, force_update=False):
 
 if __name__ == "__main__":
 
+    job_mgr = JobManager(cfg)
+    job_mgr.register_job(TrustedDomainsJob())
+
     job_queue = Queue()
-    w = Worker(job_queue)
+    w = Worker(job_queue, job_mgr)
     w.start()
 
     app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
+

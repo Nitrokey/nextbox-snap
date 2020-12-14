@@ -2,16 +2,13 @@ import os
 import sys
 from pathlib import Path
 import yaml
-import logging
 import socket
 
 from flask import jsonify
 
-from nextbox_daemon.consts import LOGGER_NAME, NEXTBOX_HDD_LABEL, API_VERSION
+from nextbox_daemon.consts import NEXTBOX_HDD_LABEL, API_VERSION
 
-log = logging.getLogger(LOGGER_NAME)
-
-
+from nextbox_daemon.config import log
 
 
 def error(msg, data=None):
