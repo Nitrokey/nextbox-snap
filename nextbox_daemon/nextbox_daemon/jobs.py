@@ -69,13 +69,13 @@ class JobManager:
     def __init__(self, config):
         self.cfg = config
         self.jobs = { }
-        print("init")
 
     def register_job(self, job):
+        log.info(f"registering job {job.name}")
         if job.name in self.jobs:
             log.warning(f"overwriting job (during register) with name: {job.name}")
         self.jobs[job.name] = job
-        print(f"register {job.name}")
+
 
     def handle_job(self, job_name):
         if job_name not in self.jobs:

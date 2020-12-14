@@ -18,7 +18,7 @@ class Worker(Thread):
         logging
         while True:
             try:
-                job_name = self.my_job_queue.get(timeout=30)
+                job_name = self.my_job_queue.get(timeout=10)
             except Empty:
                 job_name = self.job_mgr.get_recurring_job()
 
