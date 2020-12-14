@@ -3,11 +3,6 @@ import sys
 from pathlib import Path
 from functools import wraps
 
-import select
-import time
-import threading
-import subprocess
-
 import shutil
 import socket
 import urllib.request
@@ -29,7 +24,6 @@ from nextbox_daemon.consts import *
 from nextbox_daemon.config import Config, log
 from nextbox_daemon.worker import Worker
 from nextbox_daemon.jobs import JobManager, TrustedDomainsJob
-
 
 
 
