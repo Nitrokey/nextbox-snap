@@ -23,6 +23,10 @@ class Config(dict):
                 "hostname":   "NextBox",
                 "domain":     None,
                 "email":      None
+            },
+            "system": {
+                "log_lvl": logging.INFO,
+                "expert_mode": False,
             }
         })
         self.load()

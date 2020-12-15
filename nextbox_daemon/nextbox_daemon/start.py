@@ -97,6 +97,20 @@ def show_log(num_lines=50):
         else success(data=ret[:-1])
 
 
+@app.route("/system", methods=["POST", "GET"])
+@requires_auth
+def system_settings():
+    if request.method == "GET":
+        return success(data={
+            "log_lvl": cfg["system"]["log_lvl"],
+            "expert_mode": cfg["system"]["expert_mode"]
+        })
+
+    elif request.method == "POST":
+        pass
+
+
+
 #
 # @app.route("/token/<token>/<allow_ip>")
 # def set_token(token, allow_ip):
