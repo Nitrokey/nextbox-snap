@@ -110,7 +110,6 @@ def system_settings():
         pass
 
 
-
 #
 # @app.route("/token/<token>/<allow_ip>")
 # def set_token(token, allow_ip):
