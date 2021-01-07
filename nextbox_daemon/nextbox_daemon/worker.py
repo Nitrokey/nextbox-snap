@@ -6,7 +6,6 @@ import logging
 
 from nextbox_daemon.config import log
 
-
 class Worker(Thread):
     def __init__(self, job_queue, job_mgr, *v, **kw):
         super().__init__(*v, **kw)
@@ -15,7 +14,6 @@ class Worker(Thread):
         self.job_mgr = job_mgr
 
     def run(self):
-        logging
         while True:
             try:
                 job_name = self.my_job_queue.get(timeout=10)
@@ -27,6 +25,7 @@ class Worker(Thread):
                 continue
 
             self.job_mgr.handle_job(job_name)
+
 
 
 

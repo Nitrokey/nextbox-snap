@@ -44,6 +44,8 @@ class Config(dict):
                 pass
 
     def save(self):
+        print(f"saving config to {self.config_path}")
+        print(dict(self))
         with open(self.config_path, "w") as fd:
             yaml.safe_dump(dict(self), fd)
 

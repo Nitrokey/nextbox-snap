@@ -51,6 +51,7 @@ def after_request_func(response):
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
         response.headers.add('Access-Control-Allow-Headers', 'x-csrf-token')
+        response.headers.add('Access-Control-Allow-Headers', 'requesttoken')
         response.headers.add('Access-Control-Allow-Methods',
                             'GET, POST, OPTIONS, PUT, PATCH, DELETE')
         if origin:
@@ -62,6 +63,7 @@ def after_request_func(response):
 
     if not origin:
         response.headers.add('Access-Control-Allow-Origin', "192.168.10.129")
+        response.headers.add('Access-Control-Allow-Origin', "192.168.10.47")
 
     return response
 ### end CORS section
@@ -259,7 +261,7 @@ def backup():
             try:
                 size =  (p / "size").open().read().strip().split()[0]
             except FileNotFoundError:
-                size = 0
+                continue
 
             data["found"].append({
                 "name": name,
