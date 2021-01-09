@@ -18,15 +18,17 @@ class Config(dict):
                 "last_restore": None
             },
             "nextcloud": {
-                "http_port":  80,
-                "https_port": None,
-                "hostname":   "NextBox",
-                "domain":     None,
-                "email":      None
+                "http_port":    80,
+                "https_port":   None,
+                "hostname":     "NextBox",
+                "domain":       None,
+                "email":        None,
+                "desec_token":  None,
+                "dns_mode":     "off"
             },
             "system": {
-                "log_lvl": logging.INFO,
-                "expert_mode": False,
+                "log_lvl":      logging.INFO,
+                "expert_mode":  False,
             }
         })
         self.load()

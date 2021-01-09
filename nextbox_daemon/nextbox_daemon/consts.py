@@ -19,6 +19,9 @@ DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.co
 DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
 DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
 
+DYNDNS_MODES = ["desec", "static", "config", "off"]
+DYNDNS_CONFIGS = ["dns_mode", "desec_token", "email", "domain"]
+
 SYSTEMCTL_BIN = "/bin/systemctl"
 
 

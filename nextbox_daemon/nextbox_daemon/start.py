@@ -342,6 +342,39 @@ def service_operation(name, operation):
     return error("not allowed")
 
 
+@app.route("/dyndns/config", methods=["POST", "GET"])
+@requires_auth
+def dyndns():
+    if request.method == "GET":
+        data = dict(cfg["nextcloud"])
+        data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
+        return success(data=data)
+
+    # save dyndns related values to configuration
+    elif request.method == "POST":
+        for key in request.form:
+            val = request.form.get(key)
+            if key == "conf":
+                old_conf = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8")
+                if old_conf != val:
+                    log.info("writing ddclient config and restarting service")
+                    Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
+                    service_operation("ddclient", "restart")
+
+            elif key in DYNDNS_CONFIGS and val is not None:
+                if key == "dns_mode" and val not in DYNDNS_MODES:
+                    log.warning(f"key: 'dns_mode' has invalid value: {val} - skipping")
+                    continue
+                elif val is None:
+                    log.debug(f"skipping key: '{key}' -> no value provided")
+                    continue
+
+                cfg["nextcloud"][key] = val
+                log.debug(f"saving key: '{key}' with value: '{val}'")
+                cfg.save()
+        return success("DynDNS configuration saved")
+
+
 @app.route("/ddclient/test/ddclient")
 @requires_auth
 def ddclient_test_ddclient():
@@ -430,32 +463,6 @@ def https_disable():
 
     return success("HTTPS disabled")
 
-@app.route("/ddclient/config", methods=["POST", "GET"])
-@requires_auth
-def ddclient_config():
-    if request.method == "GET":
-        data = dict(cfg["nextcloud"])
-        data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
-        return success(data=data)
-
-    elif request.method == "POST":
-        for key in request.form:
-            val = request.form.get(key)
-            if key == "conf":
-                old_conf = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8")
-                if old_conf != val:
-                    log.info("writing changed ddclient config and restarting service")
-                    Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
-                    service_operation("ddclient", "restart")
-
-            elif key == "domain" and len(request.form.get(key, "")) > 0:
-                cfg["nextcloud"]["domain"] = val
-                update_trusted_domains(cfg["nextcloud"]["domain"])
-            elif key == "email" and len(request.form.get(key, "")) > 0:
-                cfg["nextcloud"]["email"] = val
-            cfg.save()
-
-        return success("DDClient configuration saved")
 
 
 def update_trusted_domains(external_domain=None, force_update=False):
