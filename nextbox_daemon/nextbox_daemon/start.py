@@ -5,7 +5,8 @@ from functools import wraps
 
 import shutil
 import socket
-import urllib.request
+import urllib.request, urllib.error
+import json
 
 # append proper (snap) site-packages path
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
@@ -342,9 +343,9 @@ def service_operation(name, operation):
     return error("not allowed")
 
 
-@app.route("/dyndns/config", methods=["POST", "GET"])
+@app.route("/config", methods=["POST", "GET"])
 @requires_auth
-def dyndns():
+def handle_config():
     if request.method == "GET":
         data = dict(cfg["nextcloud"])
         data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
@@ -372,7 +373,43 @@ def dyndns():
                 cfg["nextcloud"][key] = val
                 log.debug(f"saving key: '{key}' with value: '{val}'")
                 cfg.save()
+
         return success("DynDNS configuration saved")
+
+
+@app.route("/dyndns/captcha", methods=["POST"])
+@requires_auth
+def dyndns_captcha():
+    req = urllib.request.Request(DYNDNS_DESEC_CAPTCHA, method="POST")
+    data = urllib.request.urlopen(req).read().decode("utf-8")
+    return success(data=json.loads(data))
+
+@app.route("/dyndns/register", methods=["POST"])
+@requires_auth
+def dyndns_register():
+    data = {}
+    for key in request.form:
+        if key == "captcha_id":
+            data.setdefault("captcha", {})["id"] = request.form.get(key)
+        elif key == "captcha":
+            data.setdefault("captcha", {})["solution"] = request.form.get(key)
+        elif key == "domain":
+            data[key] = request.form.get(key)
+    data["password"] = None
+    data["email"] = cfg["nextcloud"]["email"]
+
+    headers = {"Content-Type": "application/json"}
+
+    req = urllib.request.Request(DYNDNS_DESEC_REGISTER,
+        method="POST", data=json.dumps(data).encode("utf-8"), headers=headers)
+
+    try:
+        res = urllib.request.urlopen(req).read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        desc = e.read()
+        return error(f"Could not complete registration", data=json.loads(desc))
+    return success(data=json.loads(res))
+
 
 
 @app.route("/ddclient/test/ddclient")
