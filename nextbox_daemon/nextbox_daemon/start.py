@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from pathlib import Path
 from functools import wraps
 
@@ -18,7 +19,7 @@ from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
 from nextbox_daemon.utils import get_partitions, error, success, \
-    tail, parse_backup_line, local_ip
+    tail, parse_backup_line, local_ip, cleanup_certs
 
 from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.consts import *
@@ -105,8 +106,8 @@ def show_log(num_lines=50):
 def system_settings():
     if request.method == "GET":
         return success(data={
-            "log_lvl": cfg["system"]["log_lvl"],
-            "expert_mode": cfg["system"]["expert_mode"]
+            "log_lvl": cfg["config"]["log_lvl"],
+            "expert_mode": cfg["config"]["expert_mode"]
         })
 
     elif request.method == "POST":
@@ -209,7 +210,7 @@ def umount_storage(name):
 def check_for_backup_process():
     global backup_proc
 
-    out = dict(cfg["backup"])
+    out = dict(cfg["config"])
     if backup_proc is None:
         out["running"] = False
         return out
@@ -222,7 +223,7 @@ def check_for_backup_process():
         if backup_proc.returncode == 0:
             backup_proc.parsed["state"] = "finished"
 
-            cfg["backup"]["last_" + backup_proc.user_info] = backup_proc.started
+            cfg["config"]["last_" + backup_proc.user_info] = backup_proc.started
             cfg.save()
 
 
@@ -252,7 +253,7 @@ def check_for_backup_process():
 @app.route("/backup")
 @requires_auth
 def backup():
-    data = dict(cfg["backup"])
+    data = dict(cfg["config"])
     data["operation"] = check_for_backup_process()
     data["found"] = []
 
@@ -334,11 +335,12 @@ def service_operation(name, operation):
 
     if name == "ddclient":
         cr = CommandRunner([SYSTEMCTL_BIN, operation, DDCLIENT_SERVICE], block=True)
+        output = [x for x in cr.output if x]
         return success(data={
             "service": name,
             "operation": operation,
             "return-code": cr.returncode,
-            "output": cr.output
+            "output": output
         })
     return error("not allowed")
 
@@ -347,7 +349,7 @@ def service_operation(name, operation):
 @requires_auth
 def handle_config():
     if request.method == "GET":
-        data = dict(cfg["nextcloud"])
+        data = dict(cfg["config"])
         data["conf"] = Path(DDCLIENT_CONFIG_PATH).read_text("utf-8").split("\n")
         return success(data=data)
 
@@ -366,11 +368,13 @@ def handle_config():
                 if key == "dns_mode" and val not in DYNDNS_MODES:
                     log.warning(f"key: 'dns_mode' has invalid value: {val} - skipping")
                     continue
+                elif key == "domain":
+                    job_queue.put("TrustedDomains")
                 elif val is None:
                     log.debug(f"skipping key: '{key}' -> no value provided")
                     continue
 
-                cfg["nextcloud"][key] = val
+                cfg["config"][key] = val
                 log.debug(f"saving key: '{key}' with value: '{val}'")
                 cfg.save()
 
@@ -396,7 +400,7 @@ def dyndns_register():
         elif key == "domain":
             data[key] = request.form.get(key)
     data["password"] = None
-    data["email"] = cfg["nextcloud"]["email"]
+    data["email"] = cfg["config"]["email"]
 
     headers = {"Content-Type": "application/json"}
 
@@ -410,24 +414,31 @@ def dyndns_register():
         return error(f"Could not complete registration", data=json.loads(desc))
     return success(data=json.loads(res))
 
-
-
-@app.route("/ddclient/test/ddclient")
+@app.route("/dyndns/test/ddclient")
 @requires_auth
-def ddclient_test_ddclient():
+def test_ddclient():
     cr = CommandRunner([DDCLIENT_BIN, "-verbose", "-foreground", "-force"], block=True)
     cr.log_output()
 
     for line in cr.output:
         if "SUCCESS:" in line:
             return success("DDClient test: OK")
-    return error("DDClient test: Not OK, check logs...")
+        if "Request was throttled" in line:
+            pat = "available in ([0-9]*) seconds"
+            try:
+                waitfor = int(re.search(pat, line).groups()[0]) + 5
+            except:
+                waitfor = 10
+            desc = f"Request throttled - wait {waitfor} secs"
+            return error("DDClient test: Not OK",
+                data={"reason": "throttled", "waitfor": waitfor, "desc": desc})
 
+    return error("DDClient test: Not OK", data={"reason": "unknown"})
 
-@app.route("/ddclient/test/domain")
+@app.route("/dyndns/test/resolve")
 @requires_auth
-def ddclient_test_domain():
-    domain = cfg["nextcloud"]["domain"]
+def test_resolve():
+    domain = cfg["config"]["domain"]
     try:
         resolve_ip = socket.gethostbyname(domain)
     except socket.gaierror as e:
@@ -440,16 +451,33 @@ def ddclient_test_domain():
     if resolve_ip != ext_ip:
         log.warning("Resolved IP does not match external IP")
         log.warning("This might indicate a bad DynDNS configuration")
-        return error("Domain test: Not OK, check logs...")
+        return error("Resolve test: Not OK, check logs...", data={"ip": ext_ip})
 
-    return success("Domain test: OK")
+    return success("Resolve test: OK", data={"ip": ext_ip})
 
 
-@app.route("/ddclient/enable")
+@app.route("/dyndns/test/domain")
+@requires_auth
+def test_domain():
+    domain = cfg["config"]["domain"]
+    try:
+        content = urllib.request.urlopen("http://" + domain).read().decode("utf-8")
+    except urllib.error.URLError as e:
+        return error("Domain test: Not OK")
+
+    if "Nextcloud" in content:
+        return success("Domain test: OK")
+    else:
+        return error("Domain test: Not OK")
+
+
+@app.route("/https/enable", methods=["POST"])
 @requires_auth
 def https_enable():
-    domain = cfg.get("nextcloud", {}).get("domain")
-    email = cfg.get("nextcloud", {}).get("email")
+    cleanup_certs()
+
+    domain = cfg.get("config", {}).get("domain")
+    email = cfg.get("config", {}).get("email")
     if not domain or not email:
         return error(f"failed, domain: '{domain}' email: '{email}'")
 
@@ -457,79 +485,24 @@ def https_enable():
     cr = CommandRunner(cmd, block=True)
     cr.log_output()
 
-    cfg["nextcloud"]["https_port"] = 443
+    cfg["config"]["https_port"] = 443
     cfg.save()
 
-    return success("HTTPS successfully activated")
+    return success("HTTPS enabled")
 
-@app.route("/ddclient/disable")
+@app.route("/https/disable", methods=["POST"])
 @requires_auth
 def https_disable():
     cmd = [DISABLE_HTTPS_BIN]
     cr = CommandRunner(cmd, block=True)
     cr.log_output()
 
-    cfg["nextcloud"]["https_port"] = None
+    cfg["config"]["https_port"] = None
     cfg.save()
 
-    # remove any certificates in live dir
-    bak = Path(CERTBOT_BACKUP_PATH)
-    src = Path(CERTBOT_CERTS_PATH)
-    if not bak.exists():
-        os.makedirs(bak.as_posix())
-        log.debug(f"creating certs backup directory: {bak}")
-
-    contents = os.listdir(src.as_posix())
-    if len(contents) > 1:
-        log.debug("need to clean up certs directory")
-
-    for path in contents:
-        if path == "README":
-            continue
-
-        full_src_path = src / path
-        full_bak_path = bak / path
-        idx = 1
-        while full_bak_path.exists():
-            full_bak_path = Path((bak / path).as_posix() + f".{idx}")
-            idx += 1
-
-        log.debug(f"moving old cert: {full_src_path} to {full_bak_path}")
-        shutil.move(full_src_path, full_bak_path)
-
+    cleanup_certs()
 
     return success("HTTPS disabled")
-
-
-
-def update_trusted_domains(external_domain=None, force_update=False):
-
-    #
-    #
-    # @todo: with background thread, just send job to job_queue for this to update!
-    #
-    #
-
-
-
-    get_cmd = lambda: [OCC_BIN, "config:system:get", "trusted_domains"]
-    my_ip = local_ip()
-    set_cmd = lambda idx, val: [OCC_BIN, "config:system:set",
-                                "trusted_domains", str(idx), "--value", val]
-
-    cr = CommandRunner(get_cmd(), block=True)
-    trusted_domains = [line.strip() for line in cr.output if len(line.strip()) > 0]
-
-    if not my_ip in trusted_domains:
-        log.critical(f"LOCAL IP ({my_ip}) NOT IN trusted_domains: {trusted_domains}")
-
-    if external_domain not in trusted_domains:
-        # always add at index 1, assuming 0 is the host-ip
-        cr = CommandRunner(set_cmd(1, external_domain), block=True)
-        cr.log_output()
-        # don't forget ... cr.output @fixme
-        log.info(f"adding {external_domain} to 'trusted_domains'")
-
 
 if __name__ == "__main__":
 

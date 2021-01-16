@@ -13,20 +13,16 @@ class Config(dict):
         self.config_path = config_path
 
         self.update({
-            "backup":    {
+            "config":    {
                 "last_backup":  None,
-                "last_restore": None
-            },
-            "nextcloud": {
+                "last_restore": None,
                 "http_port":    80,
                 "https_port":   None,
                 "hostname":     "NextBox",
                 "domain":       None,
                 "email":        None,
                 "desec_token":  None,
-                "dns_mode":     "off"
-            },
-            "system": {
+                "dns_mode":     "off",
                 "log_lvl":      logging.INFO,
                 "expert_mode":  False,
             }

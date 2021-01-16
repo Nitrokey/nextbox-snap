@@ -19,7 +19,8 @@ DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.co
 DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
 DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
 
-DYNDNS_MODES = ["desec", "desec_2", "static", "config", "off", "done"]
+DYNDNS_MODES = ["desec", "desec_2", "static", "config", "off",
+                "desec_done", "config_done", "static_done"]
 DYNDNS_CONFIGS = ["dns_mode", "desec_token", "email", "domain"]
 
 DYNDNS_DESEC_CAPTCHA = "https://desec.io/api/v1/captcha/"

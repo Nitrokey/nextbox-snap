@@ -1,12 +1,12 @@
 import os
-import sys
 from pathlib import Path
-import yaml
 import socket
+import shutil
 
 from flask import jsonify
 
-from nextbox_daemon.consts import NEXTBOX_HDD_LABEL, API_VERSION
+from nextbox_daemon.consts import NEXTBOX_HDD_LABEL, API_VERSION, CERTBOT_BACKUP_PATH, \
+    CERTBOT_CERTS_PATH
 
 from nextbox_daemon.config import log
 
@@ -117,6 +117,33 @@ def parse_backup_line(line, dct_data):
                 dct_data["progress"] = f"{ratio:.1f}"
             except ValueError:
                 dct_data["progress"] = None
+
+
+def cleanup_certs():
+    # remove any certificates in live dir
+    bak = Path(CERTBOT_BACKUP_PATH)
+    src = Path(CERTBOT_CERTS_PATH)
+    if not bak.exists():
+        os.makedirs(bak.as_posix())
+        log.debug(f"creating certs backup directory: {bak}")
+
+    contents = os.listdir(src.as_posix())
+    if len(contents) > 1:
+        log.debug("need to clean up certs directory")
+
+    for path in contents:
+        if path == "README":
+            continue
+
+        full_src_path = src / path
+        full_bak_path = bak / path
+        idx = 1
+        while full_bak_path.exists():
+            full_bak_path = Path((bak / path).as_posix() + f".{idx}")
+            idx += 1
+
+        log.debug(f"moving old cert: {full_src_path} to {full_bak_path}")
+        shutil.move(full_src_path, full_bak_path)
 
 
 def tail(filepath, num_lines=20):

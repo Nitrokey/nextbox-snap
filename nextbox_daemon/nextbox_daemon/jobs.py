@@ -56,7 +56,7 @@ class TrustedDomainsJob(BaseJob):
                     log.warning(f"failed: {cr.info()}")
 
         # now check for dynamic domain, always add this after the static entries idx
-        dyn_dom = cfg.get("nextcloud", {}).get("domain")
+        dyn_dom = cfg.get("config", {}).get("domain")
         if dyn_dom is not None and dyn_dom not in trusted_domains:
             log.info(f"updating 'trusted_domains' with dynamic domain: '{dyn_dom}'")
             cr = CommandRunner(set_cmd(len(self.static_entries)+1, dyn_dom), block=True)
