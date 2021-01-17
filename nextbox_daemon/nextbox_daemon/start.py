@@ -60,9 +60,11 @@ def after_request_func(response):
                             'GET, POST, OPTIONS, PUT, PATCH, DELETE')
     if origin:
         response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', request.remote_addr)
 
-    response.headers.add('Access-Control-Allow-Origin', local_ip())
-    response.headers.add('Access-Control-Allow-Origin', cfg["config"]["domain"])
+
+    #response.headers.add('Access-Control-Allow-Origin', cfg["config"]["domain"])
 
     #if not origin:
     #    response.headers.add('Access-Control-Allow-Origin', "192.168.10.129")
