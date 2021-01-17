@@ -478,6 +478,56 @@ def test_http():
         return error(f"Domain ({what}) test: Not OK",
                      data={"exc": "none", "reason": "no Nextcloud in 'content'"})
 
+@app.route("/dyndns/upnp")
+@requires_auth
+def setup_upnp():
+    import netifaces
+    import upnpclient
+
+    # get gateway ip
+    gw_ip = list(netifaces.gateways()['default'].values())[0][0]
+    # get devices (long operation)
+    devs = upnpclient.discover(timeout=0.1)
+    device = None
+    # filter out gateway
+    for dev in devs:
+        if dev._url_base.startswith(f"http://{gw_ip}"):
+            device = dev
+            break
+
+    if device is None:
+        return error("cannot find upnp-capable router")
+
+    # check for needed service
+    service = None
+    for srv in device.service:
+        if srv.name == "WANIPConn1":
+            service = srv
+            break
+
+    if service is None:
+        return error("found upnp-capable router - but w/o the needed service")
+
+    eth_ip = local_ip()
+
+    http_args = dict(NewRemoteHost='0.0.0.0', NewExternalPort=80,
+         NewProtocol='TCP', NewInternalPort=80, NewInternalClient=eth_ip,
+         NewEnabled='1', NewPortMappingDescription='NextBox - HTTP', NewLeaseDuration=0)
+    https_args = dict(NewRemoteHost='0.0.0.0', NewExternalPort=443,
+         NewProtocol='TCP', NewInternalPort=443, NewInternalClient=eth_ip,
+         NewEnabled='1', NewPortMappingDescription='NextBox - HTTPS',
+         NewLeaseDuration=0)
+    service.AddPortMapping(**http_args)
+    service.AddPortMapping(**https_args)
+
+    try:
+        service.GetSpecificPortMappingEntry(**http_args)
+        service.GetSpecificPortMappingEntry(**https_args)
+    except upnpclient.soap.SOAPError as e:
+        return error("failed setting up port-forwarding")
+    return success("port-forwarding successfully set up")
+
+
 @app.route("/https/enable", methods=["POST"])
 @requires_auth
 def https_enable():
