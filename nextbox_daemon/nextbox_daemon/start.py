@@ -49,24 +49,24 @@ backup_proc = None
 @app.after_request
 def after_request_func(response):
     origin = request.headers.get('Origin')
+
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     if request.method == 'OPTIONS':
         response = make_response()
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
         response.headers.add('Access-Control-Allow-Headers', 'x-csrf-token')
         response.headers.add('Access-Control-Allow-Headers', 'requesttoken')
         response.headers.add('Access-Control-Allow-Methods',
                             'GET, POST, OPTIONS, PUT, PATCH, DELETE')
-        if origin:
-            response.headers.add('Access-Control-Allow-Origin', origin)
-    else:
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        if origin:
-            response.headers.add('Access-Control-Allow-Origin', origin)
+    if origin:
+        response.headers.add('Access-Control-Allow-Origin', origin)
 
-    if not origin:
-        response.headers.add('Access-Control-Allow-Origin', "192.168.10.129")
-        response.headers.add('Access-Control-Allow-Origin', "192.168.10.47")
+    response.headers.add('Access-Control-Allow-Origin', local_ip())
+    response.headers.add('Access-Control-Allow-Origin', cfg["config"]["domain"])
+
+    #if not origin:
+    #    response.headers.add('Access-Control-Allow-Origin', "192.168.10.129")
+    #    response.headers.add('Access-Control-Allow-Origin', "192.168.10.47")
 
     return response
 ### end CORS section
