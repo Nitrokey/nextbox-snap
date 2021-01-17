@@ -7,6 +7,7 @@ from functools import wraps
 import shutil
 import socket
 import urllib.request, urllib.error
+import ssl
 import json
 
 # append proper (snap) site-packages path
@@ -397,10 +398,9 @@ def dyndns_register():
             data.setdefault("captcha", {})["id"] = request.form.get(key)
         elif key == "captcha":
             data.setdefault("captcha", {})["solution"] = request.form.get(key)
-        elif key == "domain":
+        elif key in ["domain", "email"]:
             data[key] = request.form.get(key)
     data["password"] = None
-    data["email"] = cfg["config"]["email"]
 
     headers = {"Content-Type": "application/json"}
 
@@ -429,9 +429,8 @@ def test_ddclient():
                 waitfor = int(re.search(pat, line).groups()[0]) + 5
             except:
                 waitfor = 10
-            desc = f"Request throttled - wait {waitfor} secs"
             return error("DDClient test: Not OK",
-                data={"reason": "throttled", "waitfor": waitfor, "desc": desc})
+                data={"reason": "throttled", "waitfor": waitfor})
 
     return error("DDClient test: Not OK", data={"reason": "unknown"})
 
@@ -455,21 +454,29 @@ def test_resolve():
 
     return success("Resolve test: OK", data={"ip": ext_ip})
 
-
-@app.route("/dyndns/test/domain")
+@app.route("/dyndns/test/http")
+@app.route("/dyndns/test/https")
 @requires_auth
-def test_domain():
+def test_http():
+    what = request.path.split("/")[-1]
     domain = cfg["config"]["domain"]
+    url = f"{what}://{domain}"
     try:
-        content = urllib.request.urlopen("http://" + domain).read().decode("utf-8")
+        content = urllib.request.urlopen(url).read().decode("utf-8")
     except urllib.error.URLError as e:
-        return error("Domain test: Not OK")
+        return error(f"Domain ({what}) test: Not OK",
+                     data={"exc": repr(e)})
+    except ssl.CertificateError as e:
+        # this very likely is due to a bad certificate, disabling https
+        # @TODO: handle this case in frontend
+        return error(f"Domain ({what}) test: Not OK - Certificate Error",
+                     data={"reason": "cert", "exc": repr(e)})
 
     if "Nextcloud" in content:
-        return success("Domain test: OK")
+        return success(f"Domain ({what}) test: OK")
     else:
-        return error("Domain test: Not OK")
-
+        return error(f"Domain ({what}) test: Not OK",
+                     data={"exc": "none", "reason": "no Nextcloud in 'content'"})
 
 @app.route("/https/enable", methods=["POST"])
 @requires_auth
