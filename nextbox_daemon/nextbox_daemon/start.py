@@ -437,25 +437,54 @@ def test_ddclient():
 
     return error("DDClient test: Not OK", data={"reason": "unknown"})
 
-@app.route("/dyndns/test/resolve")
+
+@app.route("/dyndns/test/resolve/ipv6")
+@app.route("/dyndns/test/resolve/ipv4")
 @requires_auth
-def test_resolve():
+def test_resolve4():
+    ip_type = request.path.split("/")[-1]
     domain = cfg["config"]["domain"]
+    resolve_ip = None
+    ext_ip = None
+
+    # to resolve un-cachedx
+    # we first flush all dns-related caches
+    CommandRunner([SYSTEMD_RESOLVE_BIN, "--flush-cache"], block=True)
+    CommandRunner([SYSTEMD_RESOLVE_BIN, "--reset-server-features"], block=True)
+
+    # resolving according to ip_type
     try:
-        resolve_ip = socket.gethostbyname(domain)
-    except socket.gaierror as e:
-        log.error(f"Could not resolve {domain}")
-        log.error(f"Exception: {e}")
-        resolve_ip = None
-    ext_ip = urllib.request.urlopen(GET_EXT_IP_URL).read().decode("utf-8")
+        if ip_type == "ipv4":
+            resolve_ip = socket.gethostbyname(domain)
+        else:
+            resolve_ip = socket.getaddrinfo(domain, None, socket.AF_INET6)[0][-1][0]
+    except (socket.gaierror, IndexError) as e:
+        log.error(f"Could not resolve {ip_type}: {domain}")
+        log.error(f"Exception: {repr(e)}")
+
+    try:
+        url = GET_EXT_IP4_URL if ip_type == "ipv4" else GET_EXT_IP6_URL
+        ext_ip = urllib.request.urlopen(url).read().decode("utf-8")
+    except urllib.error.URLError as e:
+        log.error(f"Could not determine own {ip_type}")
+        log.error(f"Exception: {repr(e)}")
 
     log.info(f"resolving '{domain}' to IP: {resolve_ip}, external IP: {ext_ip}")
-    if resolve_ip != ext_ip:
-        log.warning("Resolved IP does not match external IP")
-        log.warning("This might indicate a bad DynDNS configuration")
-        return error("Resolve test: Not OK, check logs...", data={"ip": ext_ip})
+    data = {"ip": ext_ip, "resolve_ip": resolve_ip}
 
-    return success("Resolve test: OK", data={"ip": ext_ip})
+    # if not both "resolve" and "getip" are successful, we have failed
+    if resolve_ip is None or ext_ip is None:
+        log.error(f"failed resolving and/or getting external {ip_type}")
+        return error("Resolve test: Not OK", data=data)
+
+    # resolving to wrong ip
+    if resolve_ip != ext_ip:
+        log.warning(f"Resolved {ip_type} does not match external {ip_type}")
+        log.warning("This might indicate a bad DynDNS configuration")
+        return error("Resolve test: Not OK", data=data)
+
+    # all good!
+    return success("Resolve test: OK", data=data)
 
 @app.route("/dyndns/test/http")
 @app.route("/dyndns/test/https")

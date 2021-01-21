@@ -127,6 +127,10 @@ def cleanup_certs():
         os.makedirs(bak.as_posix())
         log.debug(f"creating certs backup directory: {bak}")
 
+    if not src.exists():
+        log.debug("no need to cleanup, no certs dir found")
+        return
+
     contents = os.listdir(src.as_posix())
     if len(contents) > 1:
         log.debug("need to clean up certs directory")

@@ -9,8 +9,8 @@ MAX_LOG_SIZE = 2**30
 
 NEXTBOX_HDD_LABEL = "NextBoxHardDisk"
 
-GET_EXT_IP_URL = "http://ifconfig.me/ip"
-
+GET_EXT_IP4_URL = "http://v4.ipv6-test.com/api/myip.php"
+GET_EXT_IP6_URL = "http://v6.ipv6-test.com/api/myip.php"
 
 CONFIG_PATH = "/var/snap/nextbox/current/nextbox.conf"
 LOG_FILENAME = "/var/snap/nextbox/current/nextbox.log"
@@ -27,6 +27,7 @@ DYNDNS_DESEC_CAPTCHA = "https://desec.io/api/v1/captcha/"
 DYNDNS_DESEC_REGISTER = "https://desec.io/api/v1/auth/"
 
 
+SYSTEMD_RESOLVE_BIN = "/usr/bin/systemd-resolve"
 
 SYSTEMCTL_BIN = "/bin/systemctl"
 
