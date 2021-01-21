@@ -1,5 +1,3 @@
 flask
 pyyaml
 psutil
-#netifaces
-#upnpclient
