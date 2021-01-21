@@ -3,6 +3,7 @@ import sys
 import re
 from pathlib import Path
 from functools import wraps
+import signal
 
 import shutil
 import socket
@@ -502,7 +503,7 @@ def setup_upnp():
 
     # check for needed service
     service = None
-    for srv in device.service:
+    for srv in device.services:
         if srv.name == "WANIPConn1":
             service = srv
             break
@@ -563,7 +564,18 @@ def https_disable():
 
     return success("HTTPS disabled")
 
+
+def signal_handler(signal, frame):
+    print("Exit handler, delivering worker exit job now")
+    job_queue.put("exit")
+    w.join()
+    print("Joined worker - exiting now...")
+
+    sys.exit(1)
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
 
     job_mgr = JobManager(cfg)
     job_mgr.register_job(TrustedDomainsJob())

@@ -24,6 +24,10 @@ class Worker(Thread):
                 sleep(1)
                 continue
 
+            # special job "exit" will stop the worker-queue
+            if job_name == "exit":
+                break
+
             self.job_mgr.handle_job(job_name)
 
 
