@@ -491,10 +491,15 @@ def test_resolve4():
 
 @app.route("/dyndns/test/http")
 @app.route("/dyndns/test/https")
+@app.route("/dyndns/test/proxy")
 @requires_auth
 def test_http():
     what = request.path.split("/")[-1]
-    domain = cfg["config"]["domain"]
+    if what == "proxy":
+        domain = cfg["config"]["proxy_domain"]
+        what = "https"
+    else:
+        domain = cfg["config"]["domain"]
     url = f"{what}://{domain}"
     try:
         content = urllib.request.urlopen(url).read().decode("utf-8")
