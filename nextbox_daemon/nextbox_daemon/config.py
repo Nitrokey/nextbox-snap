@@ -19,11 +19,15 @@ class Config(dict):
                 "http_port":    80,
                 "https_port":   None,
                 "hostname":     "NextBox",
+                "log_lvl": logging.INFO,
+
                 "domain":       None,
                 "email":        None,
                 "desec_token":  None,
+                "nk_token":     None,
+                "proxy_active": False,
+                "proxy_domain": None,
                 "dns_mode":     "off",
-                "log_lvl":      logging.INFO,
                 "expert_mode":  False,
             }
         })

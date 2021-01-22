@@ -21,7 +21,9 @@ DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
 
 DYNDNS_MODES = ["desec", "desec_2", "static", "config", "off",
                 "desec_done", "config_done", "static_done"]
-DYNDNS_CONFIGS = ["dns_mode", "desec_token", "email", "domain"]
+
+AVAIL_CONFIGS = ["dns_mode", "desec_token", "email", "domain", "nk_token",
+                 "proxy_active", "proxy_domain"]
 
 DYNDNS_DESEC_CAPTCHA = "https://desec.io/api/v1/captcha/"
 DYNDNS_DESEC_REGISTER = "https://desec.io/api/v1/auth/"

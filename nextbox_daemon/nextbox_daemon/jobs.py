@@ -1,5 +1,7 @@
 from datetime import datetime as dt
 
+import psutil
+
 from nextbox_daemon.consts import OCC_BIN
 from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.config import log
@@ -15,7 +17,6 @@ class BaseJob:
     def is_due(self):
         if self.interval is None:
             return False
-
         return (dt.now() - self.last_run).seconds > self.interval
 
     def run(self, cfg):
@@ -28,9 +29,63 @@ class BaseJob:
         raise NotImplementedError()
 
 
+class ProxySSHJob(BaseJob):
+    name = "ProxySSH"
+    interval = 29
+
+    # ssh-keygen -b 4096 -t rsa -f /tmp/sshkey -q -N ""
+    # ssh -p 2215 -n -N -i hello_key -R 43022:localhost:80 nbproxy@mate.nitrokey.com
+
+    ssh_cmd = "ssh -p {ssh_port} -f -N -i {key_path} -R {remote_port}:localhost:{local_port} {host}"
+
+    def __init__(self):
+        self.pid = None
+        super().__init__()
+
+    def _run(self, cfg):
+        data = {
+            "ssh_port": 2215,
+            "key_path": "/var/snap/nextbox/current/hello_key",
+            "remote_port": 43022,
+            "local_port": 80,
+            "host": "nbproxy@mate.nitrokey.com",
+        }
+
+        # do nothing except killing process, if proxy_active == False
+        if not cfg["config"]["proxy_active"]:
+            if self.pid and psutil.pid_exists(self.pid):
+                psutil.Process(self.pid).kill()
+            self.pid = None
+            return
+
+        if not cfg["config"]["nk_token"]:
+            log.error("cannot establish reverse proxy - no token")
+            return
+
+        if self.pid is not None:
+            if not psutil.pid_exists(self.pid):
+                self.pid = None
+                log.warning("missing reverse proxy process, restarting")
+
+        # no running reverse proxy connection, establish!
+        if self.pid is None:
+            log.info("Starting reverse proxy connection")
+            cmd = self.ssh_cmd.format(**data).split(" ")
+            cr = CommandRunner(cmd, block=True)
+            if cr.returncode == 0:
+                # searching for process, as daemonizing leads to new pid
+                for proc in psutil.process_iter():
+                    if proc.name() == "ssh":
+                        self.pid = proc.pid
+                        break
+                log.info(f"Success starting reverse proxy (pid: {self.pid})")
+            else:
+                cr.log_output()
+                log.error("Failed starting reverse proxy, check configuration")
+
 class TrustedDomainsJob(BaseJob):
     name = "TrustedDomains"
-    interval = 30
+    interval = 47
 
     static_entries = ["192.168.*.*", "10.*.*.*", "172.16.*.*"]
 
@@ -51,18 +106,29 @@ class TrustedDomainsJob(BaseJob):
             for idx, entry in enumerate(self.static_entries):
                 log.info(f"adding '{entry}' to 'trusted_domains' with idx: {idx+1}")
                 cr = CommandRunner(set_cmd(idx+1, entry), block=True)
-
                 if cr.returncode != 0:
                     log.warning(f"failed: {cr.info()}")
 
-        # now check for dynamic domain, always add this after the static entries idx
+        # check for dynamic domain, set to idx == len(static) + 1
         dyn_dom = cfg.get("config", {}).get("domain")
+        idx = len(self.static_entries) + 1
         if dyn_dom is not None and dyn_dom not in trusted_domains:
             log.info(f"updating 'trusted_domains' with dynamic domain: '{dyn_dom}'")
-            cr = CommandRunner(set_cmd(len(self.static_entries)+1, dyn_dom), block=True)
+            cr = CommandRunner(set_cmd(idx, dyn_dom),
+                               block=True)
             if cr.returncode != 0:
                 log.warning(f"failed adding domain ({dyn_dom}) to trusted_domains")
 
+        # check and set proxy domain, set to idx == len(static) + 2
+        proxy_dom = cfg.get("config", {}).get("proxy_domain")
+        idx = len(self.static_entries) + 2
+        if proxy_dom is not None and proxy_dom not in trusted_domains:
+            log.info(
+                f"updating 'trusted_domains' with proxy domain: '{proxy_dom}'")
+            cr = CommandRunner(set_cmd(idx, proxy_dom), block=True)
+            if cr.returncode != 0:
+                log.warning(
+                    f"failed adding domain ({proxy_dom}) to trusted_domains")
 
 
 class JobManager:
@@ -74,12 +140,13 @@ class JobManager:
         log.info(f"registering job {job.name}")
         if job.name in self.jobs:
             log.warning(f"overwriting job (during register) with name: {job.name}")
-        self.jobs[job.name] = job
+        self.jobs[job.name] = job()
 
 
     def handle_job(self, job_name):
         if job_name not in self.jobs:
             log.error(f"could not find job with name: {job_name}")
+            return
 
         # run actual job
         self.jobs[job_name].run(self.cfg)

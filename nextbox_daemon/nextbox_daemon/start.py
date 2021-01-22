@@ -27,7 +27,7 @@ from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.consts import *
 from nextbox_daemon.config import Config, log
 from nextbox_daemon.worker import Worker
-from nextbox_daemon.jobs import JobManager, TrustedDomainsJob
+from nextbox_daemon.jobs import JobManager, TrustedDomainsJob, ProxySSHJob
 
 
 
@@ -368,7 +368,7 @@ def handle_config():
                     Path(DDCLIENT_CONFIG_PATH).write_text(val, "utf-8")
                     service_operation("ddclient", "restart")
 
-            elif key in DYNDNS_CONFIGS and val is not None:
+            elif key in AVAIL_CONFIGS and val is not None:
                 if key == "dns_mode" and val not in DYNDNS_MODES:
                     log.warning(f"key: 'dns_mode' has invalid value: {val} - skipping")
                     continue
@@ -377,6 +377,9 @@ def handle_config():
                 elif val is None:
                     log.debug(f"skipping key: '{key}' -> no value provided")
                     continue
+
+                if val.lower() in ["true", "false"]:
+                    val = val.lower() == "true"
 
                 cfg["config"][key] = val
                 log.debug(f"saving key: '{key}' with value: '{val}'")
@@ -599,19 +602,23 @@ def signal_handler(signal, frame):
     job_queue.put("exit")
     w.join()
     print("Joined worker - exiting now...")
-
     sys.exit(1)
 
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     job_mgr = JobManager(cfg)
-    job_mgr.register_job(TrustedDomainsJob())
+    job_mgr.register_job(TrustedDomainsJob)
+    job_mgr.register_job(ProxySSHJob)
 
     job_queue = Queue()
     w = Worker(job_queue, job_mgr)
     w.start()
 
-    app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1)
+    app.run(host="0.0.0.0", port=18585, debug=True, threaded=True, processes=1, use_reloader=False)
 
+
+
+# cat /sys/class/thermal/thermal_zone0/temp
