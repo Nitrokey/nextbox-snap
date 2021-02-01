@@ -2,4 +2,4 @@ flask
 pyyaml==5.3.1
 psutil
 gpiozero
-
+rpigpio
