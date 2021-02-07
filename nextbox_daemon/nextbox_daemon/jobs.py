@@ -178,7 +178,11 @@ class JobManager:
             return
 
         # run actual job
-        self.jobs[job_name].run(self.cfg)
+        try:
+            self.jobs[job_name].run(self.cfg)
+        except Exception as e:
+            log.error(f"failed running job: {job_name}")
+            log.error(exc_info=e)
 
     def get_recurring_job(self):
         for name, job in self.jobs.items():
