@@ -16,7 +16,6 @@ sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
 
 from queue import Queue
 
-import psutil
 from flask import Flask, render_template, request, flash, redirect, Response, \
     url_for, send_file, Blueprint, render_template, jsonify, make_response
 
@@ -28,7 +27,6 @@ from nextbox_daemon.consts import *
 from nextbox_daemon.config import Config, log
 from nextbox_daemon.worker import Worker
 from nextbox_daemon.jobs import JobManager, TrustedDomainsJob, ProxySSHJob, UpdateJob
-
 
 
 # config load
