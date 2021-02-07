@@ -27,7 +27,7 @@ from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.consts import *
 from nextbox_daemon.config import Config, log
 from nextbox_daemon.worker import Worker
-from nextbox_daemon.jobs import JobManager, TrustedDomainsJob, ProxySSHJob
+from nextbox_daemon.jobs import JobManager, TrustedDomainsJob, ProxySSHJob, UpdateJob
 
 
 
@@ -332,21 +332,25 @@ def backup_restore(name):
 @app.route("/service/<name>/<operation>")
 @requires_auth
 def service_operation(name, operation):
-    if name not in ["ddclient"]:
+    if name not in ["ddclient", "nextbox-daemon"]:
         return error("not allowed")
-    if operation not in ["stop", "start", "restart", "status", "is-active"]:
+    if operation not in ["start", "restart", "status", "is-active"]:
         return error("not allowed")
 
     if name == "ddclient":
         cr = CommandRunner([SYSTEMCTL_BIN, operation, DDCLIENT_SERVICE], block=True)
-        output = [x for x in cr.output if x]
-        return success(data={
-            "service": name,
-            "operation": operation,
-            "return-code": cr.returncode,
-            "output": output
-        })
-    return error("not allowed")
+    elif name == "nextbox-daemon":
+        cr = CommandRunner([SYSTEMCTL_BIN, operation, NEXTBOX_SERVICE], block=True)
+    else:
+        return error("not allowed")
+
+    output = [x for x in cr.output if x]
+    return success(data={
+        "service":     name,
+        "operation":   operation,
+        "return-code": cr.returncode,
+        "output":      output
+    })
 
 
 @app.route("/config", methods=["POST", "GET"])
@@ -617,6 +621,7 @@ if __name__ == "__main__":
     job_mgr = JobManager(cfg)
     job_mgr.register_job(TrustedDomainsJob)
     job_mgr.register_job(ProxySSHJob)
+    job_mgr.register_job(UpdateJob)
 
     job_queue = Queue()
     w = Worker(job_queue, job_mgr)

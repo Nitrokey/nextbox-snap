@@ -1,11 +1,12 @@
 from datetime import datetime as dt
+from time import sleep
 
 import psutil
 
-from nextbox_daemon.consts import OCC_BIN
+from nextbox_daemon.consts import *
 from nextbox_daemon.command_runner import CommandRunner
 from nextbox_daemon.config import log
-
+from nextbox_daemon.snapd import SnapsManager
 
 class BaseJob:
     name = None
@@ -27,6 +28,30 @@ class BaseJob:
 
     def _run(self, cfg):
         raise NotImplementedError()
+
+
+class UpdateJob(BaseJob):
+    name = "UpdateJob"
+    interval = 55
+
+    def __init__(self):
+        self.snap_mgr = SnapsManager()
+        super().__init__()
+
+    def _run(self, cfg):
+        updated = self.snap_mgr.check_and_refresh()
+
+        if "nextbox" in updated:
+            while not self.snap_mgr.is_change_done():
+                sleep(1)
+                log.debug("waiting for snap refresh jobs to be done")
+            CommandRunner([SYSTEMCTL_BIN, "restart", NEXTBOX_SERVICE], block=True)
+            log.info("restarted nextbox-daemon due to update")
+
+        cr1 = CommandRunner(UPDATE_NEXTBOX_APP_CMD, block=True)
+        if cr1.returncode != 0:
+            cr2 = CommandRunner(INSTALL_NEXTBOX_APP_CMD, block=True)
+            log.info("installed nextbox nextcloud app - wasn't found for update")
 
 
 class ProxySSHJob(BaseJob):
@@ -92,12 +117,14 @@ class TrustedDomainsJob(BaseJob):
     def _run(self, cfg):
         # my_ip = local_ip()
 
-        get_cmd = lambda: [OCC_BIN, "config:system:get", "trusted_domains"]
-        set_cmd = lambda idx, val: \
-            [OCC_BIN, "config:system:set", "trusted_domains", str(idx), "--value", val]
+        get_cmd = lambda prop: [OCC_BIN, "config:system:get", prop]
+        set_cmd = lambda prop, idx, val: \
+            [OCC_BIN, "config:system:set", prop, str(idx), "--value", val]
 
-        cr = CommandRunner(get_cmd(), block=True)
+        cr = CommandRunner(get_cmd("trusted_domains"), block=True)
         trusted_domains = [line.strip() for line in cr.output if len(line.strip()) > 0]
+        cr = CommandRunner(get_cmd("proxy_domains"), block=True)
+        proxy_domains = [line.strip() for line in cr.output if len(line.strip()) > 0]
 
         # leave 0-th entry as it is all the time: worst-case fallback
 
@@ -105,7 +132,7 @@ class TrustedDomainsJob(BaseJob):
         if any(entry not in trusted_domains for entry in self.static_entries):
             for idx, entry in enumerate(self.static_entries):
                 log.info(f"adding '{entry}' to 'trusted_domains' with idx: {idx+1}")
-                cr = CommandRunner(set_cmd(idx+1, entry), block=True)
+                cr = CommandRunner(set_cmd("trusted_domains", idx+1, entry), block=True)
                 if cr.returncode != 0:
                     log.warning(f"failed: {cr.info()}")
 
@@ -119,16 +146,17 @@ class TrustedDomainsJob(BaseJob):
             if cr.returncode != 0:
                 log.warning(f"failed adding domain ({dyn_dom}) to trusted_domains")
 
-        # check and set proxy domain, set to idx == len(static) + 2
+        # check and set proxy domain, set to idx == 1
         proxy_dom = cfg.get("config", {}).get("proxy_domain")
-        idx = len(self.static_entries) + 2
-        if proxy_dom is not None and proxy_dom not in trusted_domains:
-            log.info(
-                f"updating 'trusted_domains' with proxy domain: '{proxy_dom}'")
-            cr = CommandRunner(set_cmd(idx, proxy_dom), block=True)
-            if cr.returncode != 0:
-                log.warning(
-                    f"failed adding domain ({proxy_dom}) to trusted_domains")
+        if proxy_dom and cfg.get("config", {}).get("proxy_active"):
+            idx = 1
+            if proxy_dom is not None and proxy_dom not in proxy_domains:
+                log.info(
+                    f"updating 'proxy_domains' with proxy domain: '{proxy_dom}'")
+                cr = CommandRunner(set_cmd(idx, proxy_dom), block=True)
+                if cr.returncode != 0:
+                    log.warning(
+                        f"failed adding domain ({proxy_dom}) to proxy_domains")
 
 
 class JobManager:

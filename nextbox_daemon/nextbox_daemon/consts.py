@@ -19,6 +19,8 @@ DDCLIENT_CONFIG_PATH = "/var/snap/ddclient-snap/current/etc/ddclient/ddclient.co
 DDCLIENT_BIN = "/snap/bin/ddclient-snap.exec"
 DDCLIENT_SERVICE = "snap.ddclient-snap.daemon.service"
 
+NEXTBOX_SERVICE = "nextbox-daemon.service"
+
 DYNDNS_MODES = ["desec", "desec_2", "static", "config", "off",
                 "desec_done", "config_done", "static_done"]
 
@@ -32,6 +34,12 @@ DYNDNS_DESEC_REGISTER = "https://desec.io/api/v1/auth/"
 SYSTEMD_RESOLVE_BIN = "/usr/bin/systemd-resolve"
 
 SYSTEMCTL_BIN = "/bin/systemctl"
+
+UPDATE_NEXTBOX_APP_CMD = ["/snap/bin/nextcloud-nextbox.occ",
+                          "app:update", "-n", "nextbox", "--ansi"]
+INSTALL_NEXTBOX_APP_CMD = ["/snap/bin/nextcloud-nextbox.occ",
+                          "app:install", "-n", "nextbox", "--ansi"]
+
 
 
 ENABLE_HTTPS_BIN = "/snap/bin/nextcloud-nextbox.enable-https"
