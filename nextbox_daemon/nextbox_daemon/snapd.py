@@ -40,7 +40,7 @@ class SnapsManager:
         self.session = requests.Session()
         self.session.mount("http://snapd/", SnapdAdapter())
 
-        self.running = []
+        self.own_running = set()
 
     def get_stable_revision(self, name):
         resp = self.session.get(f"http://snapd/v2/find?name={name}")
@@ -59,28 +59,42 @@ class SnapsManager:
         }
         resp = self.session.post(f"http://snapd/v2/snaps", json=data)
         log.debug(f"refresh: {name}")
-        self.running.append(resp.json().get("change"))
+        self.own_running.add(resp.json().get("change"))
         return resp.json().get("status") == "OK"
 
-    def is_change_done(self):
-
-        # no running jobs, means all are done
-        if len(self.running) == 0:
-            return True
-
-        c_id = self.running.pop()
+    def is_change_done(self, c_id):
         resp2 = self.session.get(f"http://snapd/v2/changes/{c_id}")
+
+        # does not exists, so it's done
+        if resp2.json().get("result", {}).get("status", {}):
+            return False
+
+        # exists and finished
         if resp2.json().get("result").get("status") == "Done":
             log.debug("change job done")
             return True
-        else:
-            self.running.append(c_id)
-            log.debug(f"still running change job: {c_id}")
-            return False
 
-    def check_and_refresh(self):
+        # still running
+        log.debug(f"still running change job: {c_id}")
+        return False
+
+    def any_change_running(self):
+        for c_id in tuple(self.own_running):
+            if not self.is_change_done(c_id):
+                return True
+            self.own_running.remove(c_id)
+        return False
+
+    @property
+    def running(self):
+        resp = self.session.get("http://snapd/v2/changes")
+        print(resp.json())
+        c_ids = resp.json().get("result")
+        return c_ids
+
+    def check_and_refresh(self, snaps):
         updated = []
-        for snap in ["nextbox", "nextcloud-nextbox"]:
+        for snap in snaps:
             if self.get_stable_revision(snap) != self.get_local_revision(snap):
                 log.info(f"refreshing: {snap}")
                 self.refresh(snap)
