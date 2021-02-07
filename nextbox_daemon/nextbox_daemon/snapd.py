@@ -1,5 +1,4 @@
 import socket
-import pprint
 
 import sys
 sys.path.append("/snap/nextbox/current/lib/python3.6/site-packages")
@@ -59,8 +58,9 @@ class SnapsManager:
             "snaps":  [name]
         }
         resp = self.session.post(f"http://snapd/v2/snaps", json=data)
+        log.debug(f"refresh: {name}")
         self.running.append(resp.json().get("change"))
-        return resp.get("status") == "OK"
+        return resp.json().get("status") == "OK"
 
     def is_change_done(self):
 
@@ -71,17 +71,19 @@ class SnapsManager:
         c_id = self.running.pop()
         resp2 = self.session.get(f"http://snapd/v2/changes/{c_id}")
         if resp2.json().get("result").get("status") == "Done":
+            log.debug("change job done")
             return True
         else:
             self.running.append(c_id)
+            log.debug(f"still running change job: {c_id}")
             return False
 
     def check_and_refresh(self):
         updated = []
         for snap in ["nextbox", "nextcloud-nextbox"]:
             if self.get_stable_revision(snap) != self.get_local_revision(snap):
-                self.refresh(snap)
                 log.info(f"refreshing: {snap}")
+                self.refresh(snap)
                 updated.append(snap)
             else:
                 log.debug(f"no need to refresh: {snap}")

@@ -32,13 +32,14 @@ class BaseJob:
 
 class UpdateJob(BaseJob):
     name = "UpdateJob"
-    interval = 55
+    interval = 11
 
     def __init__(self):
         self.snap_mgr = SnapsManager()
         super().__init__()
 
     def _run(self, cfg):
+        log.debug("checking for needed refresh")
         updated = self.snap_mgr.check_and_refresh()
 
         if "nextbox" in updated:
@@ -56,7 +57,7 @@ class UpdateJob(BaseJob):
 
 class ProxySSHJob(BaseJob):
     name = "ProxySSH"
-    interval = 29
+    interval = 291
 
     # ssh-keygen -b 4096 -t rsa -f /tmp/sshkey -q -N ""
     # ssh -p 2215 -n -N -i hello_key -R 43022:localhost:80 nbproxy@mate.nitrokey.com
@@ -110,7 +111,7 @@ class ProxySSHJob(BaseJob):
 
 class TrustedDomainsJob(BaseJob):
     name = "TrustedDomains"
-    interval = 47
+    interval = 471
 
     static_entries = ["192.168.*.*", "10.*.*.*", "172.16.*.*"]
 

@@ -16,7 +16,7 @@ class Worker(Thread):
     def run(self):
         while True:
             try:
-                job_name = self.my_job_queue.get(timeout=10)
+                job_name = self.my_job_queue.get(timeout=5)
             except Empty:
                 job_name = self.job_mgr.get_recurring_job()
 
