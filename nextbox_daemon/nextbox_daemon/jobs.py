@@ -30,7 +30,6 @@ class BaseJob:
         raise NotImplementedError()
 
 
-
 class UpdateJob(BaseJob):
     name = "UpdateJob"
     interval = 11
@@ -40,15 +39,21 @@ class UpdateJob(BaseJob):
         super().__init__()
 
     def _run(self, cfg):
+        while self.snap_mgr.any_change_running():
+            sleep(1)
+            log.debug("before check&refresh, waiting for change(s) to finish")
+
         log.debug("checking for needed refresh")
         updated = self.snap_mgr.check_and_refresh(["nextbox", "nextcloud-nextbox"])
 
-        if "nextbox" in updated:
+        if len(updated) > 0:
             while self.snap_mgr.any_change_running():
                 sleep(1)
-                log.debug("waiting for snap refresh jobs to be done")
-            CommandRunner([SYSTEMCTL_BIN, "restart", NEXTBOX_SERVICE], block=True)
-            log.info("restarted nextbox-daemon due to update")
+                log.debug("refresh started, waiting for change(s) to finish")
+
+            if "nextbox" in updated:
+                CommandRunner([SYSTEMCTL_BIN, "restart", NEXTBOX_SERVICE], block=True)
+                log.info("restarted nextbox-daemon due to update")
 
         cr1 = CommandRunner(UPDATE_NEXTBOX_APP_CMD, block=True)
         if cr1.returncode != 0:
