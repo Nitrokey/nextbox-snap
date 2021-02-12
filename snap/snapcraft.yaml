@@ -127,6 +127,7 @@ parts:
       - gobject-introspection
       - libatasmart-dev
       - libsystemd-dev
+      - gnome-common
     stage-packages:
       - libacl1
       - libatasmart4
@@ -136,6 +137,7 @@ parts:
       - libpolkit-agent-1-0
       - libpolkit-gobject-1-0
       - parted
+      - gnome-common
     filesets:
       licenses:
         - usr/share/doc/*/*copyright*
