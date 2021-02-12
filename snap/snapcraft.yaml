@@ -18,7 +18,6 @@ apps:
     plugs: [client]
     # NOTE: This is depreciated with snapd 2.25 however it needs to stay to
     # guarantee that all clients are updated correctly.
-    aliases: [udisksctl]
   udisksd:
     daemon: simple
     command: libexec/udisks2/udisksd
@@ -64,8 +63,6 @@ slots:
 plugs:
   client:
     interface: udisks2
-
-
 
 parts:
   nextbox-bins:
@@ -155,7 +152,7 @@ parts:
       - libexec
       - sbin
       - usr/lib/*/*.so*
-    install: |
+    override-build: |
       # Run all tests shipped by default
       make check
 
@@ -165,7 +162,7 @@ parts:
     source: .
     build-packages:
       - bzr
-    install: |
+    override-build: |
       export GOPATH=$PWD/../go
       for d in udisks2 cmd/ciborium ; do
         cd $GOPATH/src/launchpad.net/ciborium/$d
