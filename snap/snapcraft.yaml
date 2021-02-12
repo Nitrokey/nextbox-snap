@@ -1,5 +1,5 @@
 name: nextbox
-version: '0.1'
+version: '0.2'
 summary: Nitrokey NextBox Core Snap
 description: |
   Nitrokey NextBox Core Snap handling global configurations and startup behavior
@@ -10,7 +10,7 @@ confinement: strict
 
 architectures:
   - build-on: arm64
-#  - build-on: amd64
+  - build-on: amd64
 
 apps:
   udisksctl:
@@ -25,12 +25,12 @@ apps:
     plugs:
         - hardware-observe
         - mount-observe
-  ciborium:
-    daemon: simple
-    command: bin/ciborium
-    plugs:
-        - client
-        - network-bind
+  #ciborium:
+  #  daemon: simple
+  #  command: bin/ciborium
+  #  plugs:
+  #      - client
+  #      - network-bind
   daemon:
     environment:
       LC_ALL: "C.UTF-8"
@@ -85,7 +85,7 @@ parts:
   ddclient:
     plugin: dump
     source: https://github.com/ddclient/ddclient.git
-    source-tag: ${SNAPCRAFT_PROJECT_VERSION}
+    source-tag: 'v3.9.1'
     stage-packages:
       - libdata-validate-ip-perl
       - libio-socket-inet6-perl
@@ -152,22 +152,19 @@ parts:
       - libexec
       - sbin
       - usr/lib/*/*.so*
-    override-build: |
-      # Run all tests shipped by default
-      make check
 
-  ciborium:
-    plugin: go
-    go-importpath: launchpad.net/ciborium
-    source: .
-    build-packages:
-      - bzr
-    override-build: |
-      export GOPATH=$PWD/../go
-      for d in udisks2 cmd/ciborium ; do
-        cd $GOPATH/src/launchpad.net/ciborium/$d
-        go test -v
-      done
+  #ciborium:
+  #  plugin: go
+  #  go-importpath: launchpad.net/ciborium
+  #  source: .
+  #  build-packages:
+  #    - bzr
+  #  override-build: |
+  #    export GOPATH=$PWD/../go
+  #    for d in udisks2 cmd/ciborium ; do
+  #      cd $GOPATH/src/launchpad.net/ciborium/$d
+  #      go test -v
+  #    done
 
   common:
     plugin: dump
