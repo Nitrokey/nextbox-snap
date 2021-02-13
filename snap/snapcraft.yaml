@@ -65,9 +65,6 @@ layout:
 slots:
   service:
     interface: udisks2
-    deny-connection:
-      - on-classic
-
 
 plugs:
   nextcloud-data:
