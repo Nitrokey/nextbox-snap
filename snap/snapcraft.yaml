@@ -15,11 +15,12 @@ architectures:
 apps:
   udisksctl:
     command: bin/udisksctl
-    plugs: [client]
+      #plugs: [client]
+  
   udisks-daemon:
     daemon: simple
     command: libexec/udisks2/udisksd
-    slots: [service]
+    #slots: [service]
     plugs:
         - hardware-observe
         - mount-observe
@@ -55,13 +56,13 @@ layout:
     bind-file: $SNAP_DATA/var/cache/ddclient/ddclient.cache
 
 
-slots:
-  service:
-    interface: udisks2
+#slots:
+#  service:
+#    interface: udisks2
 
-plugs:
-  client:
-    interface: udisks2
+#plugs:
+#  client:
+#    interface: udisks2
 
 parts:
   nextbox-bins:
@@ -108,7 +109,7 @@ parts:
 
     # "patch" doc/Makefile.am using: https://github.com/storaged-project/udisks/pull/397/files
     override-build: |
-      cp $SNAPCRAFT_PROJECT_DIR/Makefile.am $SNAPCRAFT_PART_BUILD/doc
+      cp $SNAPCRAFT_PROJECT_DIR/extra/Makefile.am $SNAPCRAFT_PART_BUILD/doc/Makefile.am
       snapcraftctl build
 
     source: https://git.launchpad.net/~snappy-hwe-team/snappy-hwe-snaps/+git/udisks2
@@ -116,8 +117,8 @@ parts:
     source-branch: udisks/2.6.4
     configflags:
       - --enable-fhs-media
-      - --enable-introspection=no
       - --enable-man=no
+      #- --enable-introspection=no
     install-via: destdir
     build-packages:
       - pkg-config
