@@ -13,16 +13,25 @@ architectures:
   - build-on: amd64
 
 apps:
+  debug:
+    command: bin/bash
+    plugs:
+      - hardware-observe
+      - mount-observe
+      - udisks2
+      
   udisksctl:
     command: bin/udisksctl
-    plugs: [udisks2]
+    plugs: 
+      - udisks2
   
-  #udisks-daemon:
-  #daemon: simple
-  #  command: libexec/udisks2/udisksd
-  #  plugs:
-  #      - hardware-observe
-  #      - mount-observe
+  udisks-daemon:
+    daemon: simple
+    command: usr/lib/udisks2/udisksd
+    plugs:
+      - hardware-observe
+      - mount-observe
+      - udisks2
 
   ddclient-daemon:
     environment:

@@ -6,10 +6,13 @@ build: run-container
 	docker exec -it $(CONT_NAME) snapcraft
 
 bash: run-container
-	docker exec -it $(CONT_NAME) /bin/bash
+	docker exec -it $(CONT_NAME) apt-get install -y snapcraft
+	docker run -it -v "$(BINDDIR)":/bind -w /bind $(CONT_NAME) /bin/bash
 
 run-container: image
 	[[ -r run-container ]] && make stop || true
+
+	#docker run -v "$(BINDDIR)":/bind -w /bind $(CONT_NAME) /snap/bin/snapcraft 
 	docker run -ti \
 		--name $(CONT_NAME) \
 		--mount type=bind,source=$(BINDDIR),target=/bind \
@@ -37,7 +40,8 @@ clean: stop
 
 
 image: Dockerfile
-	docker build -t $(CONT_NAME) --force-rm=true --rm=true .
+	#docker build -t $(CONT_NAME) --force-rm=true --rm=true .
+	docker build --no-cache --label $(CONT_NAME) --tag $(CONT_NAME):stable --network host .
 	touch $@
 
 
