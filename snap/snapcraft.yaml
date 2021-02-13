@@ -15,16 +15,14 @@ architectures:
 apps:
   udisksctl:
     command: bin/udisksctl
-    plugs: [client]
+    plugs: [udisks2]
   
-  udisks-daemon:
-    daemon: simple
-    command: libexec/udisks2/udisksd
-    slots: [service]
-    plugs:
-        - hardware-observe
-        - mount-observe
-        - dbus 
+  #udisks-daemon:
+  #daemon: simple
+  #  command: libexec/udisks2/udisksd
+  #  plugs:
+  #      - hardware-observe
+  #      - mount-observe
 
   ddclient-daemon:
     environment:
@@ -62,9 +60,9 @@ layout:
     bind-file: $SNAP_DATA/var/cache/ddclient/ddclient.cache
 
 
-slots:
-  service:
-    interface: udisks2
+#slots:
+#  service:
+#    interface: udisks2
 
 plugs:
   nextcloud-data:
@@ -75,8 +73,8 @@ plugs:
     interface: content
     content: executables
     target: $SNAP_DATA/nextcloud-bin
-  client:
-    interface: udisks2
+  #client:
+  #  interface: udisks2
 
 parts:
   nextbox-bins:
@@ -97,62 +95,62 @@ parts:
       - requirements.txt
 
 
-  udisks2:
-    plugin: autotools
-
-    # "patch" doc/Makefile.am using: https://github.com/storaged-project/udisks/pull/397/files
-    override-build: |
-      cp $SNAPCRAFT_PROJECT_DIR/extra/Makefile.am $SNAPCRAFT_PART_BUILD/doc/Makefile.am
-      snapcraftctl build
-
-    source: https://git.launchpad.net/~snappy-hwe-team/snappy-hwe-snaps/+git/udisks2
-    source-type: git
-    source-branch: udisks/2.6.4
-    configflags:
-      - --enable-fhs-media
-    install-via: destdir
-    build-packages:
-      - pkg-config
-      - xsltproc
-      - gtk-doc-tools
-      - intltool
-      - libglib2.0-dev
-      - udev
-      - libgudev-1.0-dev
-      - libpolkit-gobject-1-dev
-      - libpolkit-agent-1-dev
-      - libacl1-dev
-      - libgirepository1.0-dev
-      - gobject-introspection
-      - libatasmart-dev
-      - libsystemd-dev
-      - gnome-common
-    stage-packages:
-      - libacl1
-      - libatasmart4
-      - libglib2.0-0
-      - libgudev-1.0-0
-      - libpam-systemd
-      - libpolkit-agent-1-0
-      - libpolkit-gobject-1-0
-      - parted
-      - gnome-common
-    filesets:
-      licenses:
-        - usr/share/doc/*/*copyright*
-      binaries:
-        - bin/udisksctl
-        - libexec/udisks2/udisksd
-    prime:
-      - $binaries
-      - $licenses
-      - lib
-      - -lib/pkgconfig
-      - -lib/systemd
-      - -lib/cgmanager
-      - libexec
-      - sbin
-      - usr/lib/*/*.so*
+        # udisks2:
+        #   plugin: autotools
+        #
+        #   # "patch" doc/Makefile.am using: https://github.com/storaged-project/udisks/pull/397/files
+        #   override-build: |
+        #     cp $SNAPCRAFT_PROJECT_DIR/extra/Makefile.am $SNAPCRAFT_PART_BUILD/doc/Makefile.am
+        #     snapcraftctl build
+        #
+        #   source: https://git.launchpad.net/~snappy-hwe-team/snappy-hwe-snaps/+git/udisks2
+        #   source-type: git
+        #   source-branch: udisks/2.6.4
+        #   configflags:
+        #     - --enable-fhs-media
+        #   install-via: destdir
+        #   build-packages:
+        #     - pkg-config
+        #     - xsltproc
+        #     - gtk-doc-tools
+        #     - intltool
+        #     - libglib2.0-dev
+        #     - udev
+        #     - libgudev-1.0-dev
+        #     - libpolkit-gobject-1-dev
+        #     - libpolkit-agent-1-dev
+        #     - libacl1-dev
+        #     - libgirepository1.0-dev
+        #     - gobject-introspection
+        #     - libatasmart-dev
+        #     - libsystemd-dev
+        #     - gnome-common
+        #   stage-packages:
+        #     - libacl1
+        #     - libatasmart4
+        #     - libglib2.0-0
+        #     - libgudev-1.0-0
+        #     - libpam-systemd
+        #     - libpolkit-agent-1-0
+        #     - libpolkit-gobject-1-0
+        #     - parted
+        #     - gnome-common
+        #   filesets:
+        #     licenses:
+        #       - usr/share/doc/*/*copyright*
+        #     binaries:
+        #       - bin/udisksctl
+        #       - libexec/udisks2/udisksd
+        #   prime:
+        #     - $binaries
+        #     - $licenses
+        #     - lib
+        #     - -lib/pkgconfig
+        #     - -lib/systemd
+        #     - -lib/cgmanager
+        #     - libexec
+        #     - sbin
+        #     - usr/lib/*/*.so*
 
   ddclient:
     plugin: dump
@@ -175,4 +173,9 @@ parts:
       - usr/lib
       - usr/share
       - etc/perl
+
+  udisks2:
+    plugin: dump
+    source: .
+    stage-packages: [udisks2]
 
