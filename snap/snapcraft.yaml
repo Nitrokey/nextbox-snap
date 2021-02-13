@@ -99,7 +99,6 @@ parts:
   nextbox-daemon:
     plugin: python
     source: nextbox_daemon/
-    python-version: python3
     requirements: 
       - requirements.txt
 
