@@ -4,7 +4,7 @@ summary: Nitrokey NextBox Core Snap
 description: |
   Nitrokey NextBox Core Snap handling global configurations and startup behavior
 
-base: core18
+base: core20
 grade: stable
 confinement: strict
 
@@ -186,5 +186,5 @@ parts:
   udisks2:
     plugin: dump
     source: .
-    stage-packages: [udisks2]
+    stage-packages: [udisks2, bash]
 
