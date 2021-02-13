@@ -15,12 +15,12 @@ architectures:
 apps:
   udisksctl:
     command: bin/udisksctl
-      #plugs: [client]
+    plugs: [client]
   
   udisks-daemon:
     daemon: simple
     command: libexec/udisks2/udisksd
-    #slots: [service]
+    slots: [service]
     plugs:
         - hardware-observe
         - mount-observe
@@ -58,13 +58,9 @@ layout:
     bind-file: $SNAP_DATA/var/cache/ddclient/ddclient.cache
 
 
-#slots:
-#  service:
-#    interface: udisks2
-
-#plugs:
-#  client:
-#    interface: udisks2
+slots:
+  service:
+    interface: udisks2
 
 plugs:
   nextcloud-data:
@@ -75,6 +71,8 @@ plugs:
     interface: content
     content: executables
     target: $SNAP_DATA/nextcloud-bin
+  client:
+    interface: udisks2
 
 parts:
   nextbox-bins:
