@@ -101,6 +101,10 @@ parts:
     source: nextbox_daemon/
     requirements: 
       - requirements.txt
+    override-stage: -
+      mv lib64 lib-nextbox-daemon
+      snapcraftctl stage
+      
 
 
         # udisks2:
@@ -182,8 +186,12 @@ parts:
         #      - usr/share
         #      - etc/perl
 
-  udisks2:
+  pkgs:
     plugin: dump
     source: .
     stage-packages: [udisks2, bash, ddclient]
+    override-stage: -
+      snapcraftctl stage
+      mv lib-nextbox-daemon/* lib64
+      rm -rf lib-nextbox-daemon
 
