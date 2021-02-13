@@ -17,13 +17,15 @@ apps:
     command: bin/udisksctl
     plugs: [client]
   
-  #udisks-daemon:
-  #  daemon: simple
-  #  command: libexec/udisks2/udisksd
-  #  slots: [service]
-  #  plugs:
-  #      - hardware-observe
-  #      - mount-observe
+  udisks-daemon:
+    daemon: simple
+    command: libexec/udisks2/udisksd
+    slots: [service]
+    plugs:
+        - hardware-observe
+        - mount-observe
+        - dbus 
+
   ddclient-daemon:
     environment:
       LC_ALL: "C.UTF-8"
@@ -57,10 +59,9 @@ layout:
   /var/cache/ddclient/ddclient.cache:
     bind-file: $SNAP_DATA/var/cache/ddclient/ddclient.cache
 
-
-#slots:
-#  service:
-#    interface: udisks2
+slots:
+  service:
+    interface: udisks2
 
 plugs:
   nextcloud-data:
