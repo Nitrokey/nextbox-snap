@@ -12,7 +12,7 @@ ENV LC_ALL C.UTF-8
 
 RUN apt-get update &&\
  DEBIAN_FRONTEND=noninteractive\
- apt-get install -y fuse snapd snap-confine squashfuse sudo build-essential ubuntu-image git golang snapcraft gnome-common &&\
+ apt-get install -y fuse snapd snap-confine squashfuse sudo build-essential ubuntu-image git golang gnome-common &&\
  apt-get clean &&\
  dpkg-divert --local --rename --add /sbin/udevadm &&\
  ln -s /bin/true /sbin/udevadm 
@@ -29,4 +29,4 @@ RUN	usermod -p '$1$HMjfTD9w$7Fv/HmXJhSat..0MLBAxF/' root && \
 
 
 CMD ["/sbin/init"]
-
+WORKDIR "/bind"

@@ -1,8 +1,15 @@
-CONT_NAME=test-snap
-BINDDIR=$(shell pwd)
+CONT_NAME=build-nextbox-snap
+BINDDIR=$(abspath $(shell pwd)/..)
 
-startup: clean
-	
+build: run-container
+	docker exec -it $(CONT_NAME) apt-get install -y snapcraft
+	docker exec -it $(CONT_NAME) snapcraft
+
+bash: run-container
+	docker exec -it $(CONT_NAME) /bin/bash
+
+run-container: image
+	[[ -r run-container ]] && make stop || true
 	docker run -ti \
 		--name $(CONT_NAME) \
 		--mount type=bind,source=$(BINDDIR),target=/bind \
@@ -12,16 +19,26 @@ startup: clean
     --security-opt seccomp:unconfined \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
     -v /lib/modules:/lib/modules:ro \
-		$(CONT_NAME)-image
-
+		-d \
+		$(CONT_NAME)
+	
 	# wait a little as this container really "boots" ...
 	sleep 10
 
-clean:
+	touch $@
+
+stop:
 	@-docker stop $(CONT_NAME)
 	@-docker rm $(CONT_NAME)
+	rm -f run-container
 
-image:
-	docker build -t $(CONT_NAME)-image --force-rm=true --rm=true .
+clean: stop
+	rm -f image
 
 
+image: Dockerfile
+	docker build -t $(CONT_NAME) --force-rm=true --rm=true .
+	touch $@
+
+
+#.PHONY: stop
