@@ -66,6 +66,16 @@ layout:
 #  client:
 #    interface: udisks2
 
+plugs:
+  nextcloud-data:
+    interface: content
+    content: writable-data
+    target: $SNAP_DATA/nextcloud-data
+  nextcloud-execs:
+    interface: content
+    content: executables
+    target: $SNAP_DATA/nextcloud-bin
+
 parts:
   nextbox-bins:
     plugin: dump
