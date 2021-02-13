@@ -160,30 +160,30 @@ parts:
         #     - sbin
         #     - usr/lib/*/*.so*
 
-  ddclient:
-    plugin: dump
-    source: https://github.com/ddclient/ddclient.git
-    source-tag: 'v3.9.1'
-    stage-packages:
-      - libdata-validate-ip-perl
-      - libio-socket-inet6-perl
-      - libio-socket-ssl-perl
-      - libjson-pp-perl
-      - libsys-hostname-long-perl
-      - perl
-      - perl-base
-      - perl-modules
-    organize:
-      ddclient: bin/ddclient
-    stage:
-      - bin/ddclient
-      - usr/bin
-      - usr/lib
-      - usr/share
-      - etc/perl
+        #  ddclient:
+        #    plugin: dump
+        #    source: https://github.com/ddclient/ddclient.git
+        #    source-tag: 'v3.9.1'
+        #    stage-packages:
+        #      - libdata-validate-ip-perl
+        #      - libio-socket-inet6-perl
+        #      - libio-socket-ssl-perl
+        #      - libjson-pp-perl
+        #      - libsys-hostname-long-perl
+        #      - perl
+        #      - perl-base
+        #      - perl-modules
+        #    organize:
+        #      ddclient: bin/ddclient
+        #    stage:
+        #      - bin/ddclient
+        #      - usr/bin
+        #      - usr/lib
+        #      - usr/share
+        #      - etc/perl
 
   udisks2:
     plugin: dump
     source: .
-    stage-packages: [udisks2, bash]
+    stage-packages: [udisks2, bash, ddclient]
 
