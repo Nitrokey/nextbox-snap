@@ -14,24 +14,16 @@ architectures:
 
 apps:
   udisksctl:
-    command: bin/udisksctl.sh
+    command: bin/udisksctl
     plugs: [client]
-    # NOTE: This is depreciated with snapd 2.25 however it needs to stay to
-    # guarantee that all clients are updated correctly.
-  udisksd:
+  udisks-daemon:
     daemon: simple
     command: libexec/udisks2/udisksd
     slots: [service]
     plugs:
         - hardware-observe
         - mount-observe
-  #ciborium:
-  #  daemon: simple
-  #  command: bin/ciborium
-  #  plugs:
-  #      - client
-  #      - network-bind
-  daemon:
+  ddclient-daemon:
     environment:
       LC_ALL: "C.UTF-8"
       PERL5LIB:  "$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl-base/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl5/5.30/:$SNAP/usr/share/perl5/:$SNAP/usr/share/perl/5.30.0/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl/5.30/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl/5.30.0/"
@@ -40,7 +32,7 @@ apps:
     daemon: simple
     plugs:
       - network
-  exec:
+  ddclient:
     environment:
       LC_ALL: "C.UTF-8"
       PERL5LIB:  "$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl-base/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl5/5.30/:$SNAP/usr/share/perl5/:$SNAP/usr/share/perl/5.30.0/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl/5.30/:$SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/perl/5.30.0/"
@@ -48,6 +40,13 @@ apps:
     command: bin/ddclient
     plugs:
       - network
+
+  nextbox-daemon:
+    command: bin/start.sh
+    daemon: simple
+    plugs:
+      - network
+      - removable-media
 
 layout:
   /etc/ddclient/ddclient.conf:
@@ -106,11 +105,19 @@ parts:
 
   udisks2:
     plugin: autotools
+
+    # "patch" doc/Makefile.am using: https://github.com/storaged-project/udisks/pull/397/files
+    override-build: |
+      cp $SNAPCRAFT_PROJECT_DIR/Makefile.am $SNAPCRAFT_PART_BUILD/doc
+      snapcraftctl build
+
     source: https://git.launchpad.net/~snappy-hwe-team/snappy-hwe-snaps/+git/udisks2
     source-type: git
     source-branch: udisks/2.6.4
     configflags:
       - --enable-fhs-media
+      - --enable-introspection=no
+      - --enable-man=no
     install-via: destdir
     build-packages:
       - pkg-config
@@ -154,23 +161,3 @@ parts:
       - libexec
       - sbin
       - usr/lib/*/*.so*
-
-  #ciborium:
-  #  plugin: go
-  #  go-importpath: launchpad.net/ciborium
-  #  source: .
-  #  build-packages:
-  #    - bzr
-  #  override-build: |
-  #    export GOPATH=$PWD/../go
-  #    for d in udisks2 cmd/ciborium ; do
-  #      cd $GOPATH/src/launchpad.net/ciborium/$d
-  #      go test -v
-  #    done
-
-  common:
-    plugin: dump
-    source: .
-    prime:
-      - bin/udisksctl.sh
-
