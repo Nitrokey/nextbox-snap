@@ -35,6 +35,7 @@ apps:
     daemon: simple
     plugs:
       - network
+
   ddclient:
     environment:
       LC_ALL: "C.UTF-8"
@@ -51,6 +52,7 @@ apps:
       - network
       - network-bind
       - removable-media
+      - gpio
 
 
 layout:
@@ -59,9 +61,11 @@ layout:
   /var/cache/ddclient/ddclient.cache:
     bind-file: $SNAP_DATA/var/cache/ddclient/ddclient.cache
 
+
 slots:
   service:
     interface: udisks2
+
 
 plugs:
   nextcloud-data:
@@ -93,27 +97,6 @@ parts:
     requirements: 
       - requirements.txt
 
-  ddclient:
-    plugin: dump
-    source: https://github.com/ddclient/ddclient.git
-    source-tag: 'v3.9.1'
-    stage-packages:
-      - libdata-validate-ip-perl
-      - libio-socket-inet6-perl
-      - libio-socket-ssl-perl
-      - libjson-pp-perl
-      - libsys-hostname-long-perl
-      - perl
-      - perl-base
-      - perl-modules
-    organize:
-      ddclient: bin/ddclient
-    stage:
-      - bin/ddclient
-      - usr/bin
-      - usr/lib
-      - usr/share
-      - etc/perl
 
   udisks2:
     plugin: autotools
@@ -128,8 +111,6 @@ parts:
     source-branch: udisks/2.6.4
     configflags:
       - --enable-fhs-media
-      - --enable-man=no
-      #- --enable-introspection=no
     install-via: destdir
     build-packages:
       - pkg-config
@@ -173,3 +154,26 @@ parts:
       - libexec
       - sbin
       - usr/lib/*/*.so*
+
+  ddclient:
+    plugin: dump
+    source: https://github.com/ddclient/ddclient.git
+    source-tag: 'v3.9.1'
+    stage-packages:
+      - libdata-validate-ip-perl
+      - libio-socket-inet6-perl
+      - libio-socket-ssl-perl
+      - libjson-pp-perl
+      - libsys-hostname-long-perl
+      - perl
+      - perl-base
+      - perl-modules
+    organize:
+      ddclient: bin/ddclient
+    stage:
+      - bin/ddclient
+      - usr/bin
+      - usr/lib
+      - usr/share
+      - etc/perl
+
