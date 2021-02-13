@@ -101,9 +101,10 @@ parts:
     source: nextbox_daemon/
     requirements: 
       - requirements.txt
-    override-stage: -
-      mv lib64 lib-nextbox-daemon
-      snapcraftctl stage
+    override-build: |
+      snapcraftctl build 
+      rm $SNAPCRAFT_PART_BUILD/../install/lib64
+      # $SNAPCRAFT_PART_BUILD/lib-nextbox-daemon
       
 
 
@@ -190,8 +191,8 @@ parts:
     plugin: dump
     source: .
     stage-packages: [udisks2, bash, ddclient]
-    override-stage: -
-      snapcraftctl stage
-      mv lib-nextbox-daemon/* lib64
-      rm -rf lib-nextbox-daemon
+    #override-prime: |
+    #snapcraftctl prime
+    #mv lib-nextbox-daemon/* lib64
+    #rm -rf lib-nextbox-daemon
 
