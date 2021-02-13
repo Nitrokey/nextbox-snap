@@ -21,7 +21,7 @@ apps:
       - udisks2
       
   udisksctl:
-    command: bin/udisksctl
+    command: usr/bin/udisksctl
     plugs: 
       - udisks2
   
